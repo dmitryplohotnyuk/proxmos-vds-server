@@ -1,0 +1,19 @@
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table inet domain_router_filter {
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+		ct state established,related accept
+		iifname "tailscale0" oifname "lan0" ip daddr 10.77.0.0/24 accept
+		iifname "lan0" oifname "eth0" accept
+	}
+}
+
+table ip domain_router_nat {
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		oifname "eth0" ip saddr 10.77.0.0/24 masquerade
+	}
+}

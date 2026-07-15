@@ -1,0 +1,11 @@
+{
+	auto_https off
+}
+
+:8080 {
+	bind 127.0.0.1
+
+	handle {
+		respond "Unknown domain" 404
+	}
+}

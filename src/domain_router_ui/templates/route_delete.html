@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Удаление маршрута | Domain Router{% endblock %}
+{% block content %}
+<section class="content-narrow">
+  <a class="back-link" href="/">Назад к маршрутам</a>
+  <div class="danger-panel">
+    <p class="eyebrow eyebrow-danger">Необратимое действие</p>
+    <h1>Удалить маршрут?</h1>
+    <p>Домен <strong>{{ route.domain }}</strong> перестанет направляться на <code>{{ route.upstream }}</code> и начнет возвращать 404.</p>
+    {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+    <form class="form-actions" method="post" action="/routes/delete">
+      <input type="hidden" name="domain" value="{{ route.domain }}">
+      <input type="hidden" name="upstream" value="{{ route.upstream }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <button class="button button-danger" type="submit">Удалить маршрут</button>
+      <a class="button" href="/">Отмена</a>
+    </form>
+  </div>
+</section>
+{% endblock %}

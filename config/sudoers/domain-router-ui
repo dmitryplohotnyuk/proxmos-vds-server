@@ -1,0 +1,15 @@
+Defaults:domain-router-ui !requiretty
+
+Cmnd_Alias DOMAIN_ROUTER_UI_READ = \
+    /usr/local/bin/domain-router list --json, \
+    /usr/local/bin/domain-router status --json
+
+Cmnd_Alias DOMAIN_ROUTER_UI_WRITE = \
+    /usr/local/bin/domain-router add * --json, \
+    /usr/local/bin/domain-router set * --json, \
+    /usr/local/bin/domain-router enable * --json, \
+    /usr/local/bin/domain-router disable * --json, \
+    /usr/local/bin/domain-router remove * --json, \
+    /usr/local/bin/domain-router probe * --json
+
+domain-router-ui ALL=(root) NOPASSWD: DOMAIN_ROUTER_UI_READ, DOMAIN_ROUTER_UI_WRITE

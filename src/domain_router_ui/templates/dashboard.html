@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">content-factory-vps.win</p>
+    <h1>Маршруты</h1>
+  </div>
+  <a class="button button-primary" href="/routes/new">Добавить маршрут</a>
+</section>
+
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if probe_result %}
+<div class="alert alert-{{ probe_result.kind }}" role="status">
+  <strong>{{ probe_result.domain }}</strong>: {{ probe_result.message }}
+</div>
+{% endif %}
+
+<section class="service-strip" aria-label="Состояние сервисов">
+  {% for service in ['caddy', 'cloudflared', 'tailscaled'] %}
+  {% set state = service_status.get(service, 'unknown') %}
+  <div class="service-item">
+    <span class="status-dot status-{{ 'online' if state == 'active' else 'offline' }}"></span>
+    <div><strong>{{ service }}</strong><span>{{ state }}</span></div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="table-section" aria-labelledby="routes-heading">
+  <div class="section-heading">
+    <h2 id="routes-heading">Настроенные домены</h2>
+    <span class="count">{{ routes|length }}</span>
+  </div>
+  {% if routes %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Домен</th><th>Upstream</th><th>Состояние</th><th class="actions-heading">Действия</th></tr>
+      </thead>
+      <tbody>
+      {% for route in routes %}
+        <tr>
+          <td data-label="Домен"><a class="domain-link" href="https://{{ route.domain }}" target="_blank" rel="noreferrer">{{ route.domain }}</a></td>
+          <td data-label="Upstream"><code>{{ route.upstream }}</code></td>
+          <td data-label="Состояние"><span class="badge badge-{{ 'enabled' if route.enabled else 'disabled' }}">{{ 'Включен' if route.enabled else 'Отключен' }}</span></td>
+          <td data-label="Действия">
+            <div class="row-actions">
+              <form method="post" action="/routes/probe">
+                <input type="hidden" name="domain" value="{{ route.domain }}">
+                <input type="hidden" name="upstream" value="{{ route.upstream }}">
+                <input type="hidden" name="csrf_token" value="{{ route_actions[route.domain].probe }}">
+                <button class="button button-small" type="submit">Проверить</button>
+              </form>
+              <a class="button button-small" href="/routes/edit?domain={{ route.domain }}">Изменить</a>
+              <form method="post" action="/routes/toggle">
+                <input type="hidden" name="domain" value="{{ route.domain }}">
+                <input type="hidden" name="enabled" value="{{ 'false' if route.enabled else 'true' }}">
+                <input type="hidden" name="csrf_token" value="{{ route_actions[route.domain].toggle }}">
+                <button class="button button-small" type="submit">{{ 'Отключить' if route.enabled else 'Включить' }}</button>
+              </form>
+              <a class="button button-small button-danger-quiet" href="/routes/delete?domain={{ route.domain }}">Удалить</a>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h3>Маршрутов пока нет</h3>
+    <p>Добавьте домен и внутренний адрес первой VM или LXC.</p>
+    <a class="button" href="/routes/new">Добавить первый маршрут</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

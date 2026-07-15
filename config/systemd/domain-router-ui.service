@@ -1,0 +1,23 @@
+[Unit]
+Description=Private domain-router administration panel
+Wants=network-online.target
+After=network-online.target tailscaled.service caddy.service
+
+[Service]
+Type=simple
+User=domain-router-ui
+Group=domain-router-ui
+UMask=0077
+WorkingDirectory=/opt/domain-router-ui/source
+EnvironmentFile=-/etc/domain-router/environment
+Environment=DOMAIN_ROUTER_UI_DATABASE=/var/lib/domain-router-ui/app.db
+Environment="DOMAIN_ROUTER_UI_COMMAND=/usr/bin/sudo -n /usr/local/bin/domain-router"
+ExecStart=/opt/domain-router-ui/venv/bin/uvicorn domain_router_ui.app:app --host 127.0.0.1 --port 8090 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=10s
+PrivateTmp=true
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

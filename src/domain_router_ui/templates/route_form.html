@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ heading }} | Domain Router{% endblock %}
+{% block content %}
+<section class="content-narrow">
+  <a class="back-link" href="/">Назад к маршрутам</a>
+  <div class="page-heading page-heading-form"><div><p class="eyebrow">Маршрутизация</p><h1>{{ heading }}</h1></div></div>
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  <form class="form-stack form-panel" method="post" action="{{ action }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>
+      <span>Домен</span>
+      <input name="domain" value="{{ route.domain if route else '' }}" placeholder="app.content-factory-vps.win" autocomplete="off" required {% if route and action == '/routes/edit' %}readonly{% endif %}>
+      <small>Корневой домен или поддомен зоны content-factory-vps.win.</small>
+    </label>
+    <label>
+      <span>Upstream</span>
+      <input name="upstream" value="{{ route.upstream if route else '' }}" placeholder="http://10.77.0.10:80" autocomplete="off" required>
+      <small>HTTP или HTTPS, адрес из сети 10.77.0.0/24 и порт.</small>
+    </label>
+    <div class="form-actions">
+      <button class="button button-primary" type="submit">{{ 'Сохранить изменения' if route and action == '/routes/edit' else 'Создать маршрут' }}</button>
+      <a class="button" href="/">Отмена</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

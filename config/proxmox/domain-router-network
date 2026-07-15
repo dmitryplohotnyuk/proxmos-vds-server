@@ -1,0 +1,7 @@
+# Stable private network between domain-router and application guests.
+auto vmbr1
+iface vmbr1 inet static
+	address 10.77.0.1/24
+	bridge-ports none
+	bridge-stp off
+	bridge-fd 0

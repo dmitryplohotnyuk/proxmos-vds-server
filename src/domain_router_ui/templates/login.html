@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Вход | Domain Router{% endblock %}
+{% block content %}
+<section class="auth-shell" aria-labelledby="login-title">
+  <div class="auth-heading">
+    <span class="brand-mark brand-mark-large">DR</span>
+    <div>
+      <h1 id="login-title">Domain Router</h1>
+      <p>Приватная панель маршрутизации</p>
+    </div>
+  </div>
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  <form class="form-stack" method="post" action="/login">
+    <input type="hidden" name="csrf_token" value="{{ login_csrf }}">
+    <label>
+      <span>Логин</span>
+      <input name="username" autocomplete="username" maxlength="64" required autofocus>
+    </label>
+    <label>
+      <span>Пароль</span>
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button class="button button-primary button-wide" type="submit">Войти</button>
+  </form>
+  <p class="auth-boundary">Доступ разрешен только устройствам вашего Tailscale.</p>
+</section>
+{% endblock %}

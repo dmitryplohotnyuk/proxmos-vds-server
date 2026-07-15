@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Журнал | Domain Router{% endblock %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">Безопасность</p><h1>Журнал действий</h1></div></section>
+<section class="table-section">
+  {% if events %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Время UTC</th><th>Пользователь</th><th>Действие</th><th>Объект</th><th>Результат</th><th>Детали</th></tr></thead>
+      <tbody>
+      {% for event in events %}
+      <tr>
+        <td data-label="Время UTC"><time>{{ event.created_at }}</time></td>
+        <td data-label="Пользователь">{{ event.username }}</td>
+        <td data-label="Действие"><code>{{ event.action }}</code></td>
+        <td data-label="Объект">{{ event.object_name }}</td>
+        <td data-label="Результат"><span class="badge badge-{{ 'enabled' if event.result == 'success' else 'disabled' }}">{{ event.result }}</span></td>
+        <td data-label="Детали" class="details-cell">{{ event.details or '—' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty-state"><h3>Журнал пуст</h3><p>События появятся после первого входа или изменения маршрута.</p></div>{% endif %}
+</section>
+{% endblock %}

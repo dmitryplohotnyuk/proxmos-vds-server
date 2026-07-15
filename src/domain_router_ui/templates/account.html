@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Профиль | Domain Router{% endblock %}
+{% block content %}
+<section class="content-narrow">
+  <div class="page-heading page-heading-form"><div><p class="eyebrow">{{ session.username }}</p><h1>Смена пароля</h1></div></div>
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  <form class="form-stack form-panel" method="post" action="/account">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label><span>Текущий пароль</span><input type="password" name="current_password" autocomplete="current-password" required></label>
+    <label><span>Новый пароль</span><input type="password" name="new_password" minlength="12" autocomplete="new-password" required><small>Минимум 12 символов.</small></label>
+    <label><span>Подтверждение</span><input type="password" name="confirm_password" minlength="12" autocomplete="new-password" required></label>
+    <div class="form-actions"><button class="button button-primary" type="submit">Изменить пароль</button></div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudflare Tunnel for domain-router
+Wants=network-online.target
+After=network-online.target caddy.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

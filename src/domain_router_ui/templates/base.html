@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Domain Router{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}">
+</head>
+<body>
+  {% if session %}
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Domain Router">
+      <span class="brand-mark">DR</span>
+      <span>Domain Router</span>
+    </a>
+    <nav class="nav" aria-label="Основная навигация">
+      <a href="/">Маршруты</a>
+      <a href="/audit">Журнал</a>
+      <a href="/account">Профиль</a>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ logout_csrf|default('') }}">
+        <button class="nav-button" type="submit">Выйти</button>
+      </form>
+    </nav>
+  </header>
+  {% endif %}
+  <main class="page{% if not session %} page-auth{% endif %}">
+    {% if notice %}<div class="alert alert-success" role="status">{{ notice }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

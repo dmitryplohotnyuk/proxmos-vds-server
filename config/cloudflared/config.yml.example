@@ -1,0 +1,6 @@
+tunnel: __TUNNEL_ID__
+credentials-file: /etc/cloudflared/__TUNNEL_ID__.json
+
+ingress:
+  - service: http://127.0.0.1:8080
+
