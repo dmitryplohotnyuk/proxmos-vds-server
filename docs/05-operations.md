@@ -88,6 +88,43 @@ pct exec 100 -- /usr/local/bin/domain-router list
 https://domain-router.tail6ace7f.ts.net
 ```
 
+## Прямой доступ к Proxmox через Tailscale
+
+Tailscale также установлен непосредственно на Proxmox. Этот путь не зависит от
+работоспособности LXC `domain-router`:
+
+```text
+Hostname:       proxmox
+Tailscale IP:   100.93.12.80
+Web UI:         https://proxmox.tail6ace7f.ts.net
+SSH:            ssh root@100.93.12.80
+```
+
+Tailscale Serve принимает приватный HTTPS на `443` и проксирует его в локальный
+`pveproxy` на `https+insecure://127.0.0.1:8006`. Внешний сертификат выпущен для
+MagicDNS-имени и корректно проверяется браузером. `insecure` относится только к
+локальной проверке self-signed сертификата Proxmox внутри того же хоста.
+
+Funnel отключен, поэтому панель не доступна из публичного интернета. На Proxmox
+установлено `--accept-routes=false`: хост не принимает анонсируемую LXC subnet
+route, так как сам напрямую подключен к `vmbr1`.
+
+Проверить:
+
+```bash
+systemctl status tailscaled
+tailscale status
+tailscale ip -4
+tailscale serve status
+curl https://proxmox.tail6ace7f.ts.net/
+```
+
+Повторная установка или восстановление:
+
+```bash
+./scripts/install-proxmox-tailscale.sh
+```
+
 Проверить сервис и приватный HTTPS:
 
 ```bash

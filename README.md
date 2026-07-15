@@ -59,6 +59,16 @@ sudo ./scripts/create-content-factory-vm.sh
 Сценарий создает Ubuntu Server 24.04 VM `content-factory`, генерирует новый
 root-пароль, выводит его один раз и не сохраняет пароль в Git.
 
+Прямой аварийный доступ к самому Proxmox через Tailscale настраивается на
+Proxmox-хосте:
+
+```bash
+sudo ./scripts/install-proxmox-tailscale.sh
+```
+
+Сценарий выполняет интерактивную авторизацию устройства, отключает прием subnet
+routes на хосте, сбрасывает Funnel и публикует `pveproxy` только внутри tailnet.
+
 ## Разработка и тесты
 
 ```bash

@@ -287,3 +287,40 @@ Ubuntu веб-сервер еще не установлен.
 Диск VM занимает 300 GB виртуального пространства из примерно 349 GB thin pool.
 Фактически блоки выделяются по мере записи, но заполнение `local-lvm` нужно
 контролировать: `pvesm status` и `lvs -o+data_percent,metadata_percent`.
+
+## Tailscale непосредственно на Proxmox
+
+На Proxmox VE 9.2.4 / Debian 13 установлен официальный Tailscale `1.98.9` и
+авторизовано отдельное устройство:
+
+```text
+Hostname:       proxmox
+Tailscale IP:   100.93.12.80
+MagicDNS:       proxmox.tail6ace7f.ts.net
+Accept routes:  false
+Service:        enabled, active
+```
+
+Настроен Tailscale Serve:
+
+```text
+https://proxmox.tail6ace7f.ts.net
+  -> https+insecure://127.0.0.1:8006
+```
+
+Funnel сброшен и не включен. Проверка с Mac вернула `HTTP 200`, TLS verify `0`,
+сертификат Let's Encrypt для `proxmox.tail6ace7f.ts.net`. Обычный root SSH по
+`100.93.12.80` проверен без включения Tailscale SSH.
+
+После контрольной перезагрузки всего Proxmox подтверждено:
+
+```text
+tailscaled:                enabled, active
+Tailscale IP:              preserved
+Tailscale Serve:           preserved
+LXC 100 domain-router:     running
+VM 101 content-factory:    running
+Caddy/cloudflared:         active
+content-factory route:     preserved
+Proxmox private HTTPS:     HTTP 200, valid TLS
+```

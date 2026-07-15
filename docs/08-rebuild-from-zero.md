@@ -123,6 +123,29 @@ pct exec 100 -- /opt/domain-router-ui/source/scripts/verify-deployment.sh
 Codex обязан остановиться перед разрушительными действиями над существующим CT,
 bridge или backup и запросить отдельное подтверждение.
 
+## Прямой Tailscale на Proxmox
+
+После основной установки рекомендуется добавить независимый административный
+канал непосредственно на Proxmox-хосте:
+
+```bash
+./scripts/install-proxmox-tailscale.sh
+```
+
+Открыть выведенную ссылку авторизации и подключить устройство `proxmox` к тому
+же tailnet. Сценарий настроит приватный Tailscale Serve к `pveproxy:8006` и явно
+сбросит Funnel. Auth key и состояние Tailscale в Git не сохраняются.
+
+После перезагрузки проверить:
+
+```bash
+systemctl is-enabled tailscaled
+systemctl is-active tailscaled
+tailscale serve status
+pct status 100
+qm status 101
+```
+
 ## Данные, которые восстанавливаются отдельно
 
 Репозиторий восстанавливает код и конфигурацию, но не секретное состояние:
@@ -148,4 +171,3 @@ bridge или backup и запросить отдельное подтвержд
 `install-lxc.sh` предназначен для идемпотентного обновления пакетов и файлов,
 но перед обновлением production всегда нужен backup базы, routes и tunnel
 credentials.
-
