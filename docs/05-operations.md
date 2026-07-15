@@ -145,6 +145,42 @@ curl https://app.content-factory-vps.win
 domain-router add content-factory-vps.win http://10.77.0.10:80
 ```
 
+## VM content-factory
+
+Текущая первая application VM:
+
+```text
+VM ID:       101
+Name:        content-factory
+OS:          Ubuntu Server 24.04 LTS
+CPU:         10 vCPU
+RAM:         24576 MB
+Disk:        300 GB thin SSD
+Bridge:      vmbr1
+IP:          10.77.0.10/24
+Gateway:     10.77.0.2
+Domain:      content-factory-vps.win
+```
+
+SSH доступен через Tailscale subnet route:
+
+```bash
+ssh root@10.77.0.10
+```
+
+Для повторного создания на Proxmox:
+
+```bash
+cd domain-router-deployment
+./scripts/create-content-factory-vm.sh
+```
+
+Сценарий откажется работать, если VM ID уже занят. Root-пароль генерируется
+заново и выводится один раз; в документацию и Git он не записывается.
+
+Чистая Ubuntu не содержит веб-сервер. Пока приложение не слушает
+`10.77.0.10:80`, домен корректно доходит до VM-маршрута, но отвечает `502`.
+
 ## Перенос сервиса на другую VM
 
 ```bash

@@ -50,6 +50,15 @@ src/       CLI и FastAPI-панель
 tests/     тесты маршрутизации и панели
 ```
 
+Первая application VM воспроизводится отдельным сценарием на Proxmox:
+
+```bash
+sudo ./scripts/create-content-factory-vm.sh
+```
+
+Сценарий создает Ubuntu Server 24.04 VM `content-factory`, генерирует новый
+root-пароль, выводит его один раз и не сохраняет пароль в Git.
+
 ## Разработка и тесты
 
 ```bash
@@ -61,4 +70,3 @@ python3 -m venv .venv
 Текущая production-конфигурация зафиксирована в
 [`docs/06-deployment-log.md`](docs/06-deployment-log.md). Пароли и credentials
 в этот файл добавлять нельзя.
-

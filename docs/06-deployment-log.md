@@ -236,3 +236,54 @@ credentials, Tailscale auth keys и пароль администратора и
 Проверка shell syntax выполнена; тесты Python после сборки комплекта: `8 passed`.
 `shellcheck` на рабочем Mac отсутствовал, поэтому отдельная проверка этим
 инструментом не выполнялась.
+
+## Первая application VM
+
+Создана и включена в автозапуск VM:
+
+```text
+VM ID:       101
+Name:        content-factory
+OS:          Ubuntu Server 24.04.4 LTS
+CPU:         host, 1 socket, 10 cores
+RAM:         24576 MB, balloon disabled
+Disk:        local-lvm, 300 GB thin, SSD/discard/iothread enabled
+Network:     virtio on vmbr1
+IP:          10.77.0.10/24
+Gateway:     10.77.0.2
+DNS:         1.1.1.1
+Autostart:   enabled, order 2
+```
+
+Образ `noble-server-cloudimg-amd64.img` загружен с официального Ubuntu Cloud
+Images и проверен по `SHA256SUMS`. Cloud-init расширил root filesystem до всего
+диска и установил `qemu-guest-agent`. Root SSH по паролю разрешен по явному
+cloud-init template; пароль в документацию не записан.
+
+Проверено:
+
+```text
+root SSH authentication:       passed
+Ubuntu version:                24.04.4 LTS
+visible CPU:                   10
+visible memory:                23 GiB
+root filesystem:               290 GiB usable
+private IP and default route:  passed
+internet through NAT:          passed
+qemu-guest-agent:              active
+VM reboot and root SSH:        passed
+```
+
+Добавлен маршрут:
+
+```text
+content-factory-vps.win -> http://10.77.0.10:80
+```
+
+Caddy config валиден, Caddy/cloudflared/Tailscale активны. Внешний HTTPS-запрос
+доходит через Cloudflare и возвращает ожидаемый `502`, потому что на чистой
+Ubuntu веб-сервер еще не установлен.
+
+Диск VM занимает 300 GB виртуального пространства из примерно 349 GB thin pool.
+Фактически блоки выделяются по мере записи, но заполнение `local-lvm` нужно
+контролировать: `pvesm status` и `lvs -o+data_percent,metadata_percent`.
