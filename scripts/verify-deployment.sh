@@ -31,6 +31,8 @@ check "CLI status" domain-router status --json
 check "Tailscale active" systemctl is-active --quiet tailscaled
 check "Tailscale has IPv4" sh -c "[ -n \"$(tailscale ip -4 2>/dev/null)\" ]"
 check "Tailscale Serve configured" sh -c "tailscale serve status 2>/dev/null | grep -q '127.0.0.1:8090'"
+check "Tailscale Funnel disabled" sh -c \
+    "tailscale serve status --json 2>/dev/null | jq -e '([.AllowFunnel[]?] | any) | not'"
 
 if systemctl is-enabled --quiet cloudflared.service 2>/dev/null; then
     check "Cloudflare Tunnel active" systemctl is-active --quiet cloudflared
@@ -43,4 +45,3 @@ if [ "$failed" -ne 0 ]; then
     exit 1
 fi
 printf '\nDeployment verification passed.\n'
-

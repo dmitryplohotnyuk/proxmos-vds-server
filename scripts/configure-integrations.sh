@@ -50,6 +50,7 @@ else
     tailscale up --hostname="$TAILSCALE_HOSTNAME" --ssh --advertise-routes="$PRIVATE_CIDR"
 fi
 tailscale serve reset || true
+tailscale funnel reset || true
 tailscale serve --bg http://127.0.0.1:8090
 
 log "Creating the first panel administrator"
