@@ -190,9 +190,9 @@ domain-router add content-factory-vps.win http://10.77.0.10:80
 VM ID:       101
 Name:        content-factory
 OS:          Ubuntu Server 24.04 LTS
-CPU:         10 vCPU
-RAM:         24576 MB
-Disk:        300 GB thin SSD
+CPU:         6 vCPU
+RAM:         12288 MB
+Disk:        150 GB thin SSD
 Bridge:      vmbr1
 IP:          10.77.0.10/24
 Gateway:     10.77.0.2
@@ -214,6 +214,11 @@ cd domain-router-deployment
 
 Сценарий откажется работать, если VM ID уже занят. Root-пароль генерируется
 заново и выводится один раз; в документацию и Git он не записывается.
+
+Текущий root-раздел имеет около `145 GiB` полезного пространства. После
+уменьшения VM незарезервированный логический запас `local-lvm` составляет около
+`190 GiB`; фактическое свободное место thin pool нужно проверять через
+`pvesm status`.
 
 Чистая Ubuntu не содержит веб-сервер. Пока приложение не слушает
 `10.77.0.10:80`, домен корректно доходит до VM-маршрута, но отвечает `502`.

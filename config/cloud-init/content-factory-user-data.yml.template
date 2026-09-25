@@ -26,5 +26,6 @@ write_files:
       PasswordAuthentication yes
 runcmd:
   - [systemctl, enable, --now, qemu-guest-agent]
-  - [systemctl, restart, ssh]
-
+  - [sh, -c, "rm -f /etc/ssh/ssh_host_*"]
+  - [ssh-keygen, -A]
+  - [systemctl, enable, --now, ssh]

@@ -324,3 +324,49 @@ Caddy/cloudflared:         active
 content-factory route:     preserved
 Proxmox private HTTPS:     HTTP 200, valid TLS
 ```
+
+## 2026-09-25: уменьшение VM content-factory
+
+Перед изменением проверено состояние VM: root filesystem был занят на `1%`,
+каталоги `/root`, `/home`, `/opt` и `/srv` не содержали прикладных данных, из
+сетевых сервисов работал только SSH. Существующий диск был отсоединен и сохранен
+как rollback до завершения приемочных проверок.
+
+VM пересоздана из того же официального Ubuntu Server 24.04 cloud image со
+следующими текущими параметрами:
+
+```text
+VM ID:       101
+Name:        content-factory
+CPU:         6 vCPU
+RAM:         12288 MB, balloon disabled
+Disk:        150 GB thin SSD
+Root FS:     145 GiB, 143 GiB available after deployment
+IP:          10.77.0.10/24
+Gateway:     10.77.0.2
+Autostart:   enabled, order 2
+```
+
+Cloud-init template дополнен явной генерацией SSH host keys перед запуском
+SSH. После исправления `cloud-init status --long` показывает `done` без ошибок.
+
+Проверено:
+
+```text
+root SSH by password:        passed
+qemu-guest-agent:            active
+internet through NAT:        passed
+domain route:                preserved
+VM reboot:                   passed
+Caddy/cloudflared/Tailscale: active
+```
+
+После успешной проверки старый 300-GB rollback-диск физически удален. Состояние
+`local-lvm` после очистки:
+
+```text
+Thin pool total:             348.82 GiB
+Physical data usage:         2.30%
+Physical available:          about 341 GiB
+Unreserved logical capacity: about 190 GiB
+```
