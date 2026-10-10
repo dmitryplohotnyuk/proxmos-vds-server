@@ -9,10 +9,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markdown_it import MarkdownIt
+from starlette.concurrency import run_in_threadpool
+from domain_router_services.integrations import IntegrationError, valid_credentials
 
 from .config import AppSettings, default_settings
 from .database import AuthenticatedSession, Database
 from .router_client import RouterClient, RouterClientError
+from .service_client import ServiceClient, ServiceClientError
 from .security import (
     LOGIN_CSRF_COOKIE,
     SESSION_COOKIE,
@@ -30,6 +34,9 @@ NOTICE_MESSAGES = {
     "route-disabled": "Маршрут отключен.",
     "route-removed": "Маршрут удален.",
     "password-changed": "Пароль изменен, остальные сессии завершены.",
+    "service-enabled": "Доступ к сервису через Tailscale включён.",
+    "service-disabled": "Доступ к сервису через Tailscale выключен.",
+    "integration-updated": "Операция выполнена. Проверьте состояние подключения ниже.",
 }
 
 
@@ -51,11 +58,16 @@ async def form_data(request: Request) -> dict[str, str]:
 def create_app(
     settings: AppSettings | None = None,
     router_client: RouterClient | None = None,
+    service_client: ServiceClient | None = None,
 ) -> FastAPI:
     config = settings or default_settings()
     database = Database(config.database_path)
     router = router_client or RouterClient(config.router_command)
+    services = service_client or ServiceClient(config.service_command)
     templates = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
+    guide_html = MarkdownIt("default", {"html": False}).render(
+        (PACKAGE_DIR / "help" / "cloudflare.md").read_text(encoding="utf-8")
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -67,6 +79,7 @@ def create_app(
     app.state.database = database
     app.state.router = router
     app.state.settings = config
+    app.state.services = services
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -121,6 +134,71 @@ def create_app(
     @app.get("/healthz")
     async def healthz():
         return {"status": "ok"}
+
+    @app.get("/docs", response_class=HTMLResponse)
+    async def documentation(request: Request):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        return template(request, "docs.html", session=session, guide_html=guide_html)
+
+    async def integrations_page(request, session, *, error=None, status_code=200):
+        try:
+            state = await run_in_threadpool(services.integrations)
+        except ServiceClientError:
+            state = {'errors': ['panel', 'gateway']}
+            error = error or "Агент подключений недоступен. Действующие подключения не изменены."
+        return template(request, "integrations.html", session=session, state=state,
+                        error=error, status_code=status_code,
+                        integration_csrf=csrf_token(session.csrf_secret, "integrations"))
+
+    @app.get("/integrations", response_class=HTMLResponse)
+    async def integrations_get(request: Request):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        return await integrations_page(request, session)
+
+    @app.post("/integrations", response_class=HTMLResponse)
+    async def integrations_post(request: Request):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        form = await form_data(request)
+        error = csrf_or_error(session, "integrations", form.get("csrf_token", ""))
+        if error:
+            return await integrations_page(request, session, error=error, status_code=400)
+        action, target = form.get('operation', ''), form.get('target', '')
+        allowed = {'tailscale-connect', 'panel-serve', 'cloudflare-apply', 'cloudflare-rollback'}
+        if action not in allowed or target not in {'panel', 'gateway'} or (
+            target == 'gateway' and action != 'tailscale-connect') or form.get('confirm') != 'yes':
+            return await integrations_page(request, session, error="Подтвердите выбранную операцию.", status_code=400)
+        if database.login_is_limited(session.username, config.login_window_minutes, config.login_max_attempts):
+            return await integrations_page(request, session, error="Проверка пароля временно ограничена.", status_code=429)
+        user = await run_in_threadpool(database.verify_user, session.username, form.get('current_password', ''))
+        if user is None:
+            database.record_login_failure(session.username)
+            database.audit(session.user_id, action, "integration", target, "denied")
+            return await integrations_page(request, session, error="Неверный текущий пароль.", status_code=403)
+        database.clear_login_failures(session.username)
+        operation = {'action': action}
+        if action in {'cloudflare-apply', 'cloudflare-rollback'}:
+            operation['expected_revision'] = form.get('revision', '')
+        if action == 'cloudflare-apply':
+            operation.update(mode=form.get('mode', ''), secret=form.get('secret', ''))
+            try:
+                valid_credentials(operation['mode'], operation['secret'])
+            except IntegrationError as exc:
+                return await integrations_page(request, session, error=str(exc), status_code=400)
+        try:
+            await run_in_threadpool(services.integration_action, target, operation)
+        except ServiceClientError:
+            database.audit(session.user_id, action, "integration", target, "failed")
+            return await integrations_page(request, session,
+                error="Операция не подтверждена. Проверьте состояние ниже. При неудачной замене Tunnel восстанавливается прежняя конфигурация; при обрыве связи дождитесь автоматического отката (90 секунд).",
+                status_code=409)
+        database.audit(session.user_id, action, "integration", target, "success")
+        return RedirectResponse('/integrations?notice=integration-updated', status_code=303)
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_page(request: Request):
@@ -458,6 +536,58 @@ def create_app(
             probe_result={"domain": domain, "message": message, "kind": result_kind},
             error=None,
         )
+
+    async def internal_page(request: Request, session: AuthenticatedSession,
+                            error: str | None = None, status_code: int = 200):
+        try:
+            inventory = await run_in_threadpool(services.inventory)
+        except ServiceClientError as exc:
+            inventory = {"services": [], "updated_at": None, "errors": []}
+            error = error or str(exc)
+        actions = {item['id']: csrf_token(session.csrf_secret, f"service:toggle:{item['id']}")
+                   for item in inventory['services']}
+        grouped = {}
+        for item in inventory['services']:
+            key = item['guest_key'] + ':' + item['guest_identity'] + ':' + item['address']
+            group = grouped.setdefault(key, {**item, 'key': key, 'services': [], 'enabled_count': 0})
+            group['services'].append(item)
+            group['enabled_count'] += int(item['enabled'] and not item['stale'])
+        groups = sorted(grouped.values(), key=lambda group: group['guest_name'].lower())
+        for group in groups:
+            group['services'].sort(key=lambda item: (not item['enabled'], item['port']))
+        return template(request, 'internal.html', session=session, inventory=inventory,
+                        groups=groups, service_actions=actions, error=error, status_code=status_code)
+
+    @app.get('/internal', response_class=HTMLResponse)
+    async def internal_services(request: Request):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        return await internal_page(request, session)
+
+    @app.post('/internal/toggle', response_class=HTMLResponse)
+    async def internal_toggle(request: Request):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        form = await form_data(request)
+        identifier = form.get('id', '')
+        error = csrf_or_error(session, f'service:toggle:{identifier}', form.get('csrf_token', ''))
+        if error:
+            return await internal_page(request, session, error, 400)
+        if form.get('enabled') not in {'true', 'false'} or form.get('expected_enabled') not in {'true', 'false'}:
+            return await internal_page(request, session, 'Некорректное состояние переключателя.', 400)
+        enabled = form['enabled'] == 'true'
+        try:
+            await run_in_threadpool(services.toggle, identifier, enabled,
+                                   form['expected_enabled'] == 'true')
+        except ServiceClientError as exc:
+            database.audit(session.user_id, 'toggle', 'private-service', identifier, 'failed', str(exc))
+            return await internal_page(request, session, str(exc), 409)
+        database.audit(session.user_id, 'enable' if enabled else 'disable',
+                       'private-service', identifier, 'success', 'Tailscale gateway')
+        notice = 'service-enabled' if enabled else 'service-disabled'
+        return RedirectResponse('/internal?notice=' + notice, status_code=303)
 
     @app.get("/audit", response_class=HTMLResponse)
     async def audit_page(request: Request):

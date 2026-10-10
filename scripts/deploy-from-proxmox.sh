@@ -20,8 +20,7 @@ fi
 archive=$(mktemp /tmp/domain-router-source.XXXXXX.tar.gz)
 trap 'rm -f "$archive"' EXIT
 log "Copying repository into CT $CT_ID"
-tar --exclude=.git --exclude=.venv --exclude=.pytest_cache --exclude=.env \
-    -czf "$archive" -C "$PROJECT_DIR" .
+bash "$SCRIPT_DIR/package-source.sh" "$archive"
 pct exec "$CT_ID" -- mkdir -p /opt/domain-router-ui/source
 pct push "$CT_ID" "$archive" /tmp/domain-router-source.tar.gz
 pct exec "$CT_ID" -- tar -xzf /tmp/domain-router-source.tar.gz -C /opt/domain-router-ui/source

@@ -32,7 +32,7 @@ class RouterSettings:
     lock_file: Path = Path("/run/lock/domain-router.lock")
     caddy_listen: str = ":8080"
     caddy_bind: str = "127.0.0.1"
-    allowed_domain: str = "content-factory-vps.win"
+    allowed_domain: str = "content-factory-vps.win,mesh-kremen.stream,content-factory.win"
     upstream_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
         ipaddress.ip_network("10.77.0.0/24"),
     )
@@ -48,7 +48,7 @@ def default_settings() -> RouterSettings:
         routes_file=Path(os.environ.get("DOMAIN_ROUTER_ROUTES_FILE", "/etc/domain-router/routes.yml")),
         caddy_file=Path(os.environ.get("DOMAIN_ROUTER_CADDY_FILE", "/etc/caddy/Caddyfile")),
         lock_file=Path(os.environ.get("DOMAIN_ROUTER_LOCK_FILE", "/run/lock/domain-router.lock")),
-        allowed_domain=os.environ.get("DOMAIN_ROUTER_ALLOWED_DOMAIN", "content-factory-vps.win"),
+        allowed_domain=os.environ.get("DOMAIN_ROUTER_ALLOWED_DOMAIN", "content-factory-vps.win,mesh-kremen.stream,content-factory.win"),
         upstream_networks=networks,
     )
 
@@ -69,10 +69,10 @@ def normalize_domain(value: str, allowed_domain: str | None = None) -> str:
     if not DOMAIN_RE.fullmatch(domain):
         raise RouterError(f"Invalid domain: {value}")
     if allowed_domain:
-        zone = allowed_domain.strip().lower().rstrip(".")
+        zones = [zone.strip().lower().rstrip(".") for zone in allowed_domain.split(",") if zone.strip()]
         comparable = domain.removeprefix("*.")
-        if comparable != zone and not comparable.endswith(f".{zone}"):
-            raise RouterError(f"Domain must belong to {zone}")
+        if not any(comparable == zone or comparable.endswith(f".{zone}") for zone in zones):
+            raise RouterError(f"Domain must belong to one of: {', '.join(zones)}")
     return domain
 
 

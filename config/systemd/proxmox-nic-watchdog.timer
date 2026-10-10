@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the Proxmox Ethernet adapter for hardware hangs
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

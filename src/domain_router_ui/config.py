@@ -18,6 +18,7 @@ class AppSettings:
     login_window_minutes: int = 15
     login_max_attempts: int = 5
     secure_cookies: bool = True
+    service_command: tuple[str, ...] = ()
 
 
 def default_settings() -> AppSettings:
@@ -32,6 +33,7 @@ def default_settings() -> AppSettings:
             os.environ.get("DOMAIN_ROUTER_UI_DATABASE", "/var/lib/domain-router-ui/app.db")
         ),
         router_command=tuple(command),
+        service_command=tuple(shlex.split(os.environ.get('DOMAIN_ROUTER_SERVICE_COMMAND', ''))),
         session_hours=int(os.environ.get("DOMAIN_ROUTER_UI_SESSION_HOURS", "12")),
         login_window_minutes=int(
             os.environ.get("DOMAIN_ROUTER_UI_LOGIN_WINDOW_MINUTES", "15")

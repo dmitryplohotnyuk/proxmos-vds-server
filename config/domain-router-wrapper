@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+set -a
+if [ -r /etc/domain-router/environment ]; then
+    . /etc/domain-router/environment
+fi
+set +a
+exec /opt/domain-router-ui/venv/bin/python -m domain_router.cli "$@"

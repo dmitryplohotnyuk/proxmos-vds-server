@@ -1,0 +1,31 @@
+name: Repository checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest
+      - run: python scripts/check-repository.py --history
+      - run: |
+          for file in scripts/*.sh config/domain-router-wrapper scripts/service-inventory-agent; do
+            bash -n "$file"
+          done
+          for file in src/domain_router_ui/static/*.js; do
+            node --check "$file"
+          done
+          git diff --check

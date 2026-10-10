@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% macro counted(number, one, few, many) -%}{{ number }} {{ many if 11 <= number % 100 <= 14 else (one if number % 10 == 1 else (few if 2 <= number % 10 <= 4 else many)) }}{%- endmacro %}
+{% block title %}Внутренние адреса · Domain Router{% endblock %}
+{% block content %}
+<section class="page-heading inventory-heading">
+  <div><h1>Внутренние адреса</h1><div class="inventory-totals"><span>{{ counted(groups|length, 'узел', 'узла', 'узлов') }}</span><span>{{ counted(inventory.services|length, 'сервис', 'сервиса', 'сервисов') }}</span><span class="access-total">{{ inventory.services|selectattr('enabled')|list|length }} включено</span></div></div>
+</section>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% for warning in inventory.errors %}<div class="alert alert-warning" role="status">{{ warning }}</div>{% endfor %}
+<div class="inventory-filters">
+  <div class="search-field"><img src="/static/search.svg" alt="" width="16" height="16"><input type="search" id="service-search" aria-label="Поиск сервиса" placeholder="Сервис, узел или IP"></div>
+  <select id="service-filter" aria-label="Доступ через Tailscale">
+    <option value="all">Все сервисы</option><option value="on">Доступ включён</option><option value="off">Доступ выключен</option>
+  </select>
+  <div class="inventory-sync"><span class="sync-time">Обновлено <time>{{ inventory.updated_at or '—' }}</time></span><button type="button" class="icon-button" id="inventory-refresh" title="Обновить список" aria-label="Обновить список"><img src="/static/refresh-cw.svg" alt="" width="16" height="16"></button></div>
+</div>
+<div class="guest-groups">
+{% for group in groups %}
+<details class="guest-group" data-guest-group="{{ group.key }}">
+  <summary class="guest-summary">
+    <div class="guest-identity"><img class="guest-chevron" src="/static/chevron-right.svg" alt="" width="16" height="16"><span class="guest-symbol"><img src="/static/server.svg" alt="" width="20" height="20"></span><div><h2>{{ group.guest_name }}</h2><span class="guest-meta">{{ 'LXC' if group.kind == 'lxc' else 'VM' }} {{ group.vmid }}<span class="guest-state {{ 'running' if group.guest_status == 'running' else '' }}">{{ 'Работает' if group.guest_status == 'running' else 'Остановлен' }}</span></span></div></div>
+    <div class="guest-addresses"><div class="guest-address"><span>Tailscale</span><code>{{ group.address }}</code><button type="button" class="icon-button" data-copy="{{ group.address }}" title="Копировать IP" aria-label="Копировать IP {{ group.guest_name }}"><img src="/static/copy.svg" alt="" width="16" height="16"></button></div>{% if group.lan_address %}<div class="guest-lan"><span>LAN</span><code>{{ group.lan_address }}</code></div>{% endif %}</div>
+    <div class="guest-counts"><span>{{ counted(group.services|length, 'сервис', 'сервиса', 'сервисов') }}</span><span class="enabled-count">{{ group.enabled_count }} включено</span></div>
+  </summary>
+  <div class="guest-content">
+    <table class="inventory-table">
+      <thead><tr><th>Сервис</th><th>Порт</th><th>Подключение</th><th>Проверка со шлюза</th><th>Доступ через Tailscale</th></tr></thead>
+      <tbody>
+      {% for item in group.services %}
+        <tr data-service-row data-enabled="{{ 'on' if item.enabled else 'off' }}">
+          <td data-label="Сервис"><strong>{{ item.name }}</strong></td>
+          <td data-label="Порт"><span class="port-value"><code>{{ item.port }}</code><span class="protocol-label">{{ item.protocols|join(' / ') }}</span></span></td>
+          <td data-label="Подключение"><div class="service-links"><button type="button" class="icon-button" data-copy="{{ item.ssh or item.url or (item.address ~ ':' ~ item.port) }}" title="{{ 'Копировать SSH-команду' if item.ssh else 'Копировать адрес сервиса' }}" aria-label="Копировать: {{ item.name }} {{ item.guest_name }} {{ item.port }}"><img src="/static/copy.svg" alt="" width="16" height="16"></button>{% if item.url %}<a class="service-open" href="{{ item.url }}" target="_blank" rel="noreferrer" title="Открыть через Tailscale">Открыть<img src="/static/external-link.svg" alt="" width="14" height="14"></a>{% endif %}{% if item.lan_url %}<a class="lan-open" href="{{ item.lan_url }}" target="_blank" rel="noreferrer" title="Открыть в локальной сети">LAN</a>{% endif %}</div></td>
+          <td data-label="Проверка со шлюза"><span class="connection-state {{ 'available' if item.reachable and not item.stale else ('unavailable' if item.stale or item.reachable == false else '') }}"><span></span>{{ 'Нет свежих данных' if item.stale else ('TCP доступен' if item.reachable else ('Нет ответа' if item.reachable == false else 'Не проверен')) }}</span></td>
+          <td data-label="Доступ через Tailscale">
+            <form method="post" action="/internal/toggle" class="access-form">
+              <input type="hidden" name="csrf_token" value="{{ service_actions[item.id] }}"><input type="hidden" name="id" value="{{ item.id }}"><input type="hidden" name="enabled" value="{{ 'false' if item.enabled else 'true' }}"><input type="hidden" name="expected_enabled" value="{{ 'true' if item.enabled else 'false' }}">
+              <label class="access-switch"><input type="checkbox" role="switch" aria-label="Доступ через Tailscale: {{ item.name }}, {{ item.guest_name }}, {{ item.port }}" {% if item.enabled %}checked{% endif %} {% if item.stale and not item.enabled %}disabled{% endif %}><span class="switch-track" aria-hidden="true"></span><span>{{ 'Включён' if item.enabled else 'Выключен' }}</span></label>
+              <noscript><button class="button button-small" type="submit">Применить</button></noscript>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% else %}<div class="inventory-empty">Сервисы не обнаружены.</div>{% endfor %}
+<div class="inventory-empty" id="inventory-no-results" hidden>Ничего не найдено.</div>
+</div>
+<div id="copy-status" role="status" class="copy-status" aria-live="polite"></div>
+{% endblock %}
+{% block scripts %}<script src="/static/internal.js" defer></script>{% endblock %}

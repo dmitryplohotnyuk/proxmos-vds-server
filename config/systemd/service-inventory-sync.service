@@ -1,0 +1,10 @@
+[Unit]
+Description=Discover guest services and synchronize Tailscale gateway policy
+After=pve-guests.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/service-inventory-agent --sync
+UMask=0077
+TimeoutStartSec=180

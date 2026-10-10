@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Документация · Domain Router{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Документация</h1><a class="button button-primary" href="/routes/new"><img src="/static/plus.svg" alt="" width="16" height="16">Добавить маршрут</a></div>
+<div class="docs-layout">
+  <aside class="docs-sidebar" aria-label="Содержание">
+    <strong>Подключение домена</strong>
+    <nav id="docs-toc" aria-label="Разделы инструкции"></nav>
+    <a class="docs-external" href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Открыть Cloudflare ↗</a>
+  </aside>
+  <article class="docs-article">{{ guide_html|safe }}</article>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/docs.js" defer></script>{% endblock %}

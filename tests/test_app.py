@@ -101,6 +101,34 @@ def test_authentication_and_security_headers(client) -> None:
     dashboard = test_client.get("/")
     assert dashboard.status_code == 200
     assert "Маршруты" in dashboard.text
+    assert '<p class="eyebrow">content-factory-vps.win' not in dashboard.text
+
+
+def test_documentation_requires_login(client) -> None:
+    test_client, _, _ = client
+    response = test_client.get("/docs", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+def test_cloudflare_documentation(client) -> None:
+    test_client, fake_router, database = client
+    login(test_client)
+    before = database.audit_events()
+    response = test_client.get("/docs")
+    assert response.status_code == 200
+    assert 'href="/docs" aria-current="page"' in response.text
+    assert "cfargotunnel.com" in response.text
+    assert 'href="/integrations#cloudflare-tunnel"' in response.text
+    assert "3967b53d-d8e8-4f1b-aa23-38105aa9eb62" not in response.text
+    assert "DOMAIN_ROUTER_ALLOWED_DOMAIN" in response.text
+    assert "не нужен второй маршрут" in response.text
+    assert "domain-router-wrapper" in response.text
+    assert '<table>' in response.text
+    assert 'href="https://developers.cloudflare.com/' in response.text
+    assert response.headers["cache-control"] == "no-store"
+    assert fake_router.items == []
+    assert database.audit_events() == before
 
 
 def test_route_crud_and_audit(client) -> None:
@@ -120,6 +148,9 @@ def test_route_crud_and_audit(client) -> None:
     assert len(fake_router.items) == 1
     dashboard = test_client.get("/")
     assert "app.content-factory-vps.win" in dashboard.text
+    assert 'aria-label="Маршрут: app.content-factory-vps.win"' in dashboard.text
+    assert 'title="Удалить маршрут"' in dashboard.text
+    assert '/static/routes.js' in dashboard.text
     assert any(event["action"] == "add" for event in database.audit_events())
 
 
@@ -136,6 +167,24 @@ def test_csrf_rejects_route_change(client) -> None:
     )
     assert response.status_code == 400
     assert fake_router.items == []
+
+
+def test_route_switch_and_delete_confirmation(client) -> None:
+    test_client, fake_router, _ = client
+    fake_router.items.append(dict(domain='app.content-factory-vps.win',
+                                  upstream='http://10.77.0.10:80', enabled=True))
+    login(test_client)
+    page = test_client.get('/')
+    form = re.search(r'action="/routes/toggle"(.*?)</form>', page.text, re.S).group(1)
+    response = test_client.post('/routes/toggle', data={
+        'csrf_token': hidden_token(form), 'domain': 'app.content-factory-vps.win',
+        'enabled': 'false'}, follow_redirects=False)
+    assert response.status_code == 303
+    assert not fake_router.items[0]['enabled']
+    confirm = test_client.get('/routes/delete?domain=app.content-factory-vps.win')
+    assert confirm.status_code == 200
+    assert 'action="/routes/delete"' in confirm.text
+    assert len(fake_router.items) == 1
 
 
 def test_password_change_revokes_old_session(client) -> None:

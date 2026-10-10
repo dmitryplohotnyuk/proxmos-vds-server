@@ -52,6 +52,13 @@ Proxmox host: 192.168.0.176
 - [06-deployment-log.md](06-deployment-log.md) - фактическое состояние развертывания.
 - [07-admin-panel-plan.md](07-admin-panel-plan.md) - архитектура, безопасность и этапы реализации веб-панели.
 - [08-rebuild-from-zero.md](08-rebuild-from-zero.md) - три способа полного повторного развертывания.
+- [09-incident-2026-10-06-nic-hang.md](09-incident-2026-10-06-nic-hang.md) - разбор отказа физического сетевого адаптера Proxmox.
+- [10-adguard-home.md](10-adguard-home.md) - сетевой DNS-фильтр, настройка роутера и восстановление.
+- [11-tailscale-gateway.md](11-tailscale-gateway.md) - отдельный шлюз приватного доступа к Jellyfin и другим сервисам, восстановление и проверки.
+- [12-internal-services.md](12-internal-services.md) - автоматическое обнаружение, группировка по IP и управление приватным доступом из админки.
+- [13-cloudflare-domain-guide.md](13-cloudflare-domain-guide.md) - подключение домена к Cloudflare и маршрутам; вкладка Документация в админке.
+- [14-integration-manager.md](14-integration-manager.md) - настройка Cloudflare Tunnel и подключений Tailscale из админки, безопасность и восстановление.
+- [15-repository-audit.md](15-repository-audit.md) - аудит полноты, исправления, проверки и оставшиеся ограничения воспроизводимости.
 
 ## Текущее состояние
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh internal service inventory every minute
+
+[Timer]
+OnBootSec=45
+OnUnitInactiveSec=60
+AccuracySec=5
+Unit=service-inventory-sync.service
+
+[Install]
+WantedBy=timers.target

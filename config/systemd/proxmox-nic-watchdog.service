@@ -1,0 +1,11 @@
+[Unit]
+Description=Recover the Proxmox Ethernet adapter after an e1000e hardware hang
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/default/proxmox-nic-watchdog
+ExecStart=/usr/local/sbin/proxmox-nic-watchdog
+Nice=10
+IOSchedulingClass=idle

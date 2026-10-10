@@ -7,6 +7,8 @@ from typing import Any
 from domain_router_ui.app import create_app
 from domain_router_ui.config import AppSettings
 from domain_router_ui.database import Database
+from domain_router_services.agent import merge_snapshot
+from domain_router_ui.service_client import ServiceClientError
 
 
 class DemoRouterClient:
@@ -66,7 +68,36 @@ database.initialize()
 if database.user_count() == 0:
     database.create_user("admin", "domain router demo password")
 
+class DemoServices:
+    def __init__(self):
+        self.state = merge_snapshot(dict(services=[], aliases={}, revision=0, updated_at=None),
+            [dict(kind='lxc', vmid=vmid, identity='demo', name=name, status='running')
+             for vmid, name in [(104, 'media'), (106, 'adguard-home'), (110, 'new-service')]],
+            {'lxc:104': (['10.77.0.14', '192.168.0.156'], [('tcp', 8096, '*'), ('tcp', 445, '*')]),
+             'lxc:106': (['10.77.0.53', '192.168.0.5'], [('tcp', 3000, '*'), ('tcp', 53, '*'), ('udp', 53, '*')]),
+             'lxc:110': (['192.168.0.190'], [('tcp', 8080, '*')])})
+        for item in self.state['services']:
+            item['reachable'] = True
+
+    def inventory(self):
+        return self.state
+
+    def integrations(self):
+        from test_integrations import FakeIntegrations
+        return FakeIntegrations().integrations()
+
+    def integration_action(self, target, operation):
+        return {}
+
+    def toggle(self, identifier, enabled, expected_enabled):
+        item = next(item for item in self.state['services'] if item['id'] == identifier)
+        if item['enabled'] != expected_enabled:
+            raise ServiceClientError('State conflict')
+        item['enabled'] = enabled
+
+
 app = create_app(
     AppSettings(database_path=database_path, router_command=("unused",), secure_cookies=False),
     DemoRouterClient(),
+    DemoServices(),
 )

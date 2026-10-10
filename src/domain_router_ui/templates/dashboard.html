@@ -2,10 +2,9 @@
 {% block content %}
 <section class="page-heading">
   <div>
-    <p class="eyebrow">content-factory-vps.win</p>
     <h1>Маршруты</h1>
   </div>
-  <a class="button button-primary" href="/routes/new">Добавить маршрут</a>
+  <a class="button button-primary" href="/routes/new"><img src="/static/plus.svg" alt="" width="16" height="16">Добавить маршрут</a>
 </section>
 
 {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
@@ -32,7 +31,7 @@
   </div>
   {% if routes %}
   <div class="table-wrap">
-    <table>
+    <table class="routes-table">
       <thead>
         <tr><th>Домен</th><th>Upstream</th><th>Состояние</th><th class="actions-heading">Действия</th></tr>
       </thead>
@@ -41,23 +40,25 @@
         <tr>
           <td data-label="Домен"><a class="domain-link" href="https://{{ route.domain }}" target="_blank" rel="noreferrer">{{ route.domain }}</a></td>
           <td data-label="Upstream"><code>{{ route.upstream }}</code></td>
-          <td data-label="Состояние"><span class="badge badge-{{ 'enabled' if route.enabled else 'disabled' }}">{{ 'Включен' if route.enabled else 'Отключен' }}</span></td>
+          <td data-label="Состояние">
+            <form method="post" action="/routes/toggle" class="route-access access-form">
+              <input type="hidden" name="domain" value="{{ route.domain }}">
+              <input type="hidden" name="enabled" value="{{ 'false' if route.enabled else 'true' }}">
+              <input type="hidden" name="csrf_token" value="{{ route_actions[route.domain].toggle }}">
+              <label class="access-switch"><input type="checkbox" role="switch" aria-label="Маршрут: {{ route.domain }}" {% if route.enabled %}checked{% endif %}><span class="switch-track" aria-hidden="true"></span><span>{{ 'Включён' if route.enabled else 'Выключен' }}</span></label>
+              <noscript><button class="button button-small" type="submit">{{ 'Отключить' if route.enabled else 'Включить' }}</button></noscript>
+            </form>
+          </td>
           <td data-label="Действия">
             <div class="row-actions">
               <form method="post" action="/routes/probe">
                 <input type="hidden" name="domain" value="{{ route.domain }}">
                 <input type="hidden" name="upstream" value="{{ route.upstream }}">
                 <input type="hidden" name="csrf_token" value="{{ route_actions[route.domain].probe }}">
-                <button class="button button-small" type="submit">Проверить</button>
+                <button class="icon-button route-action" type="submit" title="Проверить доступность" aria-label="Проверить {{ route.domain }}"><img src="/static/activity.svg" alt="" width="16" height="16"></button>
               </form>
-              <a class="button button-small" href="/routes/edit?domain={{ route.domain }}">Изменить</a>
-              <form method="post" action="/routes/toggle">
-                <input type="hidden" name="domain" value="{{ route.domain }}">
-                <input type="hidden" name="enabled" value="{{ 'false' if route.enabled else 'true' }}">
-                <input type="hidden" name="csrf_token" value="{{ route_actions[route.domain].toggle }}">
-                <button class="button button-small" type="submit">{{ 'Отключить' if route.enabled else 'Включить' }}</button>
-              </form>
-              <a class="button button-small button-danger-quiet" href="/routes/delete?domain={{ route.domain }}">Удалить</a>
+              <a class="icon-button route-action" href="/routes/edit?domain={{ route.domain }}" title="Редактировать маршрут" aria-label="Изменить {{ route.domain }}"><img src="/static/square-pen.svg" alt="" width="16" height="16"></a>
+              <a class="icon-button route-action action-delete" href="/routes/delete?domain={{ route.domain }}" title="Удалить маршрут" aria-label="Удалить {{ route.domain }}"><img src="/static/trash.svg" alt="" width="16" height="16"></a>
             </div>
           </td>
         </tr>
@@ -74,3 +75,4 @@
   {% endif %}
 </section>
 {% endblock %}
+{% block scripts %}<script src="/static/routes.js" defer></script>{% endblock %}

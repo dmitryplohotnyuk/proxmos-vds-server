@@ -22,6 +22,48 @@ pct exec 100 -- nft list ruleset
 pct exec 100 -- systemctl status domain-router-network-watchdog.timer
 ```
 
+## Watchdog физического Ethernet Proxmox
+
+На Proxmox установлен отдельный watchdog для встроенного Intel I219-V. Он не
+проверяет обычную доступность интернета и не реагирует на выключенный роутер.
+Срабатывание происходит только при появлении в журнале ядра точной ошибки
+`e1000e ... nic0: Detected Hardware Unit Hang`.
+
+Проверка выполняется каждые 30 секунд. После обнаружения ошибки watchdog:
+
+1. сохраняет диагностику в systemd journal;
+2. проверяет доступность локального шлюза через `vmbr0`;
+3. пробует reset через `ethtool`;
+4. пробует выключить и включить физический link;
+5. переподключает PCI-устройство к драйверу `e1000e` и применяет ifupdown-конфигурацию.
+
+Между попытками восстановления действует cooldown 5 минут. Автоматическая
+перезагрузка Proxmox по умолчанию выключена.
+
+Проверить состояние и журнал:
+
+```bash
+systemctl status proxmox-nic-watchdog.timer
+systemctl list-timers proxmox-nic-watchdog.timer
+journalctl -u proxmox-nic-watchdog.service --no-pager
+```
+
+Безопасно проверить запуск без сброса сети:
+
+```bash
+WATCHDOG_FORCE=1 WATCHDOG_DRY_RUN=1 /usr/local/sbin/proxmox-nic-watchdog
+```
+
+Повторная установка на Proxmox:
+
+```bash
+sudo ./scripts/install-proxmox-nic-watchdog.sh
+```
+
+Параметры находятся в `/etc/default/proxmox-nic-watchdog`. Включать
+`WATCHDOG_AUTO_REBOOT=1` следует только после отдельной проверки процедуры
+восстановления и штатного завершения VM/LXC.
+
 Проверить Caddy:
 
 ```bash
@@ -57,7 +99,8 @@ ssh root@domain-router
 ```text
 domain-router:                100.103.127.113
 Proxmox UI:                   https://10.77.0.1:8006
-VM/LXC в приватной сети:      10.77.0.10-10.77.0.199
+VM/LXC в приватной сети:      10.77.0.10-10.77.0.127 (свободные адреса)
+Виртуальные IP реестра:       10.77.0.128-10.77.0.239 (не выдавать гостям)
 ```
 
 На Linux-клиенте может потребоваться включить прием subnet routes:
@@ -196,7 +239,7 @@ Disk:        150 GB thin SSD
 Bridge:      vmbr1
 IP:          10.77.0.10/24
 Gateway:     10.77.0.2
-Domain:      content-factory-vps.win
+Domains:     content-factory.win, www.content-factory.win
 ```
 
 SSH доступен через Tailscale subnet route:
@@ -220,8 +263,10 @@ cd domain-router-deployment
 `190 GiB`; фактическое свободное место thin pool нужно проверять через
 `pvesm status`.
 
-Чистая Ubuntu не содержит веб-сервер. Пока приложение не слушает
-`10.77.0.10:80`, домен корректно доходит до VM-маршрута, но отвечает `502`.
+Сценарий создаёт чистую Ubuntu без веб-сервера. Приложение на существующей VM
+и текущие routes являются отдельным состоянием. Не считайте старую запись
+`content-factory-vps.win` рабочим маршрутом: при последней проверке она давала
+404. Фактический список всегда проверяйте через `domain-router list --json`.
 
 ## Перенос сервиса на другую VM
 
@@ -275,6 +320,11 @@ keep last 7 daily backups
 /etc/systemd/system/domain-router-ui.service
 /etc/sudoers.d/domain-router-ui
 ```
+
+Полный перечень секретного состояния CT 100/107 и Proxmox, включая управляемые
+версии Tunnel, Tailscale state и inventory decisions, приведён в
+[восстановлении](08-rebuild-from-zero.md#данные-которые-восстанавливаются-отдельно).
+Один backup исходников не восстанавливает регистрацию устройств и данные сервисов.
 
 Перед крупными изменениями:
 
@@ -345,3 +395,11 @@ sudo -u domain-router-ui sudo -n /usr/local/bin/domain-router status --json
 Для выбранной схемы restricted sudo параметр `NoNewPrivileges` должен быть
 `no`. Изоляция сервиса обеспечивается отдельным пользователем, `PrivateTmp`,
 `ProtectHome` и точным списком разрешенных CLI-команд.
+
+### Внутренние адреса и VPN-переключатели
+
+Управление сервисами находится на `/internal`, отдельно от публичных маршрутов.
+Источник данных и решений - `/var/lib/service-inventory/inventory.json` на
+Proxmox; обновление выполняет `service-inventory-sync.timer`. Не менять live
+firewall CT 107 вручную после установки агента. Диагностика, backup и rollback:
+[12-internal-services.md](12-internal-services.md).

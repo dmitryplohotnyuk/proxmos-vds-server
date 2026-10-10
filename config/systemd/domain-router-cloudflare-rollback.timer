@@ -1,0 +1,10 @@
+[Unit]
+Description=Safety rollback for a Cloudflare Tunnel replacement
+
+[Timer]
+OnActiveSec=90s
+AccuracySec=1s
+Unit=domain-router-cloudflare-rollback.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+#!/usr/sbin/nft -f
+
+# Replace only our table; never flush Tailscale's managed rules.
+table inet tailscale_gateway
+flush table inet tailscale_gateway
+table inet tailscale_gateway {
+    chain forward {
+        type filter hook forward priority 10; policy drop;
+        ct state invalid drop
+        ct state established,related counter accept
+        iifname "tailscale0" oifname "lan0" ip daddr 10.77.0.10 tcp dport { 22, 80, 443 } counter accept
+        iifname "tailscale0" oifname "lan0" ip daddr 10.77.0.12 tcp dport 22 counter accept
+        iifname "tailscale0" oifname "lan0" ip daddr 10.77.0.14 tcp dport { 22, 8096 } counter accept
+        iifname "tailscale0" oifname "lan0" ip daddr 10.77.0.15 tcp dport { 22, 8090, 9080 } counter accept
+        iifname "tailscale0" oifname "lan0" ip daddr 10.77.0.53 tcp dport { 22, 53, 3000 } counter accept
+        iifname "tailscale0" oifname "lan0" ip daddr 10.77.0.53 udp dport 53 counter accept
+        iifname "tailscale0" oifname "eth0" ip daddr 192.168.0.222 tcp dport 8123 counter accept
+        iifname "tailscale0" oifname "lan0" ip daddr { 10.77.0.10, 10.77.0.12, 10.77.0.14, 10.77.0.15, 10.77.0.53 } icmp type echo-request counter accept
+        counter drop
+    }
+}

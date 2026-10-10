@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Подключения · Domain Router{% endblock %}
+{% macro confirmation() %}
+<label><span>Текущий пароль администратора</span><input type="password" name="current_password" autocomplete="current-password" required></label>
+<label class="integration-confirm"><input type="checkbox" name="confirm" value="yes" required><span>Подтверждаю изменение подключения</span></label>
+{% endmacro %}
+{% macro fields(operation, target='panel') %}
+<input type="hidden" name="csrf_token" value="{{ integration_csrf }}"><input type="hidden" name="operation" value="{{ operation }}"><input type="hidden" name="target" value="{{ target }}">
+{% endmacro %}
+{% block content %}
+<div class="page-heading"><h1>Подключения</h1><div class="form-actions"><a class="button" href="/docs#section-8">Инструкция</a><a class="button icon-button" href="/integrations" title="Обновить состояние" aria-label="Обновить состояние"><img src="/static/refresh-cw.svg" alt="" width="16" height="16"></a></div></div>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% if state.errors %}<div class="alert alert-warning">Недоступные агенты: {{ state.errors|join(', ') }}. Операции для этих узлов заблокированы.</div>{% endif %}
+<section class="integration-section" id="cloudflare-tunnel">
+  <div class="integration-heading"><h2>Cloudflare Tunnel</h2>{% if state.cloudflare %}<span class="badge {{ 'badge-enabled' if state.cloudflare.connected else 'badge-disabled' }}">{{ 'Подключён' if state.cloudflare.connected else 'Нет связи' }}</span>{% endif %}</div>
+  {% if state.cloudflare %}
+  {% set cf = state.cloudflare %}
+  <dl class="integration-facts"><div><dt>Управление</dt><dd>{{ 'На сервере (credentials JSON)' if cf.mode == 'local' else 'В Cloudflare (connector token)' }}</dd></div><div><dt>Tunnel UUID</dt><dd><code>{{ cf.tunnel_id or 'Не настроен' }}</code></dd></div><div><dt>DNS Target</dt><dd class="integration-target"><code>{{ cf.dns_target or '—' }}</code>{% if cf.dns_target %}<button type="button" class="icon-button" data-copy-target="{{ cf.dns_target }}" title="Скопировать DNS Target" aria-label="Скопировать DNS Target"><img src="/static/copy.svg" alt="" width="16" height="16"></button>{% endif %}</dd></div></dl>
+  {% if cf.pending %}<div class="alert alert-warning">Выполняется изменение или восстановление Tunnel. Обновите состояние через 90 секунд.</div>{% else %}
+  <details class="integration-settings"><summary>Настроить Tunnel</summary>
+    <form method="post" action="/integrations" class="form-stack integration-form" data-integration-form>
+      {{ fields('cloudflare-apply') }}<input type="hidden" name="revision" value="{{ cf.revision }}">
+      <fieldset class="integration-modes"><legend>Тип подключения</legend><label><input type="radio" name="mode" value="local" checked><span>Credentials JSON</span></label><label><input type="radio" name="mode" value="remote"><span>Connector token</span></label></fieldset>
+      <label data-credentials-file><span>Файл credentials JSON</span><input type="file" accept=".json,application/json" data-file-input></label>
+      <label><span data-secret-label>Содержимое credentials JSON</span><textarea name="secret" rows="5" maxlength="8192" autocomplete="off" spellcheck="false" required></textarea></label>
+      <div class="alert alert-warning">Замена может прервать публичные сайты. При новом UUID потребуется обновить DNS. Для connector token настройте маршруты в Cloudflare на <code>http://127.0.0.1:8080</code>. Проверка соединения не проверяет DNS и содержимое сайта.</div>
+      {{ confirmation() }}
+      <div class="form-actions"><button class="button button-primary" type="submit"><img src="/static/network.svg" alt="" width="16" height="16">Проверить и применить</button><span class="integration-progress" role="status" hidden>Проверка подключения…</span></div>
+    </form>
+  </details>
+  {% if cf.can_rollback %}<details class="integration-settings"><summary>Вернуть предыдущий Tunnel</summary><form method="post" action="/integrations" class="form-stack integration-form" data-integration-form>{{ fields('cloudflare-rollback') }}<input type="hidden" name="revision" value="{{ cf.revision }}"><p class="muted">DNS в Cloudflare не откатывается автоматически.</p>{{ confirmation() }}<button class="button" type="submit">Восстановить конфигурацию</button></form></details>{% endif %}
+  {% endif %}{% endif %}
+</section>
+<section class="integration-section">
+  <div class="integration-heading"><h2>Tailscale</h2><a href="https://login.tailscale.com/admin/machines" target="_blank" rel="noopener noreferrer">Консоль Tailscale ↗</a></div>
+  {% for target, title in [('panel', 'Админка Domain Router'), ('gateway', 'Шлюз приватных сервисов')] %}
+  {% set ts = state.get(target) %}
+  <div class="integration-node" {% if ts and ts.state in ['NeedsLogin', 'NoState', 'Starting', 'NeedsMachineAuth'] %}data-awaiting-auth{% endif %}>
+    <div class="integration-node-heading"><h3>{{ title }}</h3>{% if ts %}<span class="badge {{ 'badge-enabled' if ts.state == 'Running' and ts.online else 'badge-disabled' }}">{{ ts.state }}</span>{% else %}<span class="badge badge-disabled">Агент недоступен</span>{% endif %}</div>
+    {% if ts %}
+    <dl class="integration-facts"><div><dt>Узел</dt><dd>{{ ts.hostname or 'Не зарегистрирован' }}</dd></div><div><dt>Tailscale IP</dt><dd><code>{{ ts.ips|join(' · ') or '—' }}</code></dd></div><div><dt>MagicDNS</dt><dd><code>{{ ts.dns_name or '—' }}</code></dd></div>{% if ts.routes %}<div><dt>Объявленные сети</dt><dd><code>{{ ts.routes|join(', ') }}</code></dd></div>{% endif %}</dl>
+    {% if ts.state in ['NeedsLogin', 'NoState', 'Stopped'] %}
+    {% if ts.auth_url %}<div class="integration-auth" data-awaiting-auth><a class="button button-primary" href="{{ ts.auth_url }}" target="_blank" rel="noopener noreferrer">Авторизовать в Tailscale ↗</a></div>{% endif %}
+    <details class="integration-settings"><summary>{{ 'Получить ссылку авторизации' if ts.state != 'Stopped' else 'Возобновить подключение' }}</summary><form method="post" action="/integrations" class="form-stack integration-form" data-integration-form>{{ fields('tailscale-connect', target) }}{{ confirmation() }}<button class="button button-primary" type="submit">Подключить Tailscale</button></form></details>
+    {% elif ts.state == 'NeedsMachineAuth' %}<div class="alert alert-warning" data-awaiting-auth>Подтвердите устройство в консоли Tailscale. Для шлюза также одобрите объявленные сети.</div>
+    {% elif ts.state == 'Starting' %}<div class="integration-auth" data-awaiting-auth>Подключение устанавливается…</div>{% endif %}
+    {% if target == 'panel' and ts.state == 'Running' %}<details class="integration-settings"><summary>Восстановить HTTPS админки</summary><form method="post" action="/integrations" class="form-stack integration-form" data-integration-form>{{ fields('panel-serve') }}{{ confirmation() }}<button class="button" type="submit">Включить Tailscale Serve</button></form></details>{% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/integrations.js" defer></script>{% endblock %}

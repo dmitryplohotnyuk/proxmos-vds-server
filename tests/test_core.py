@@ -64,6 +64,15 @@ def test_domain_and_upstream_policy() -> None:
         )
 
 
+def test_multiple_allowed_zones() -> None:
+    zones = "content-factory-vps.win,mesh-kremen.stream,content-factory.win"
+    for domain in ["content-factory.win", "www.content-factory.win", "mesh-kremen.stream"]:
+        assert normalize_domain(domain, zones) == domain
+    for domain in ["content-factory.win.evil.test", "evilcontent-factory.win"]:
+        with pytest.raises(RouterError, match="belong"):
+            normalize_domain(domain, zones)
+
+
 def test_route_lifecycle_and_render(settings: RouterSettings) -> None:
     runner = FakeRunner()
     store = RouteStore(settings, runner)

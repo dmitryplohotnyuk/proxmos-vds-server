@@ -1,0 +1,10 @@
+[Unit]
+Description=Restore pending Domain Router Cloudflare configuration
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/domain-router-ui/venv/bin/python /opt/domain-router-integrations/agent.py --rollback
+UMask=0077
+Restart=on-failure
+RestartSec=5s

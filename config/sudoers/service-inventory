@@ -1,0 +1,1 @@
+service-inventory ALL=(root) NOPASSWD: /usr/local/sbin/service-inventory-agent ""
