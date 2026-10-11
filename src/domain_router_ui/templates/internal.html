@@ -9,9 +9,12 @@
 {% for warning in inventory.errors %}<div class="alert alert-warning" role="status">{{ warning }}</div>{% endfor %}
 <div class="inventory-filters">
   <div class="search-field"><img src="/static/search.svg" alt="" width="16" height="16"><input type="search" id="service-search" aria-label="Поиск сервиса" placeholder="Сервис, узел или IP"></div>
-  <select id="service-filter" aria-label="Доступ через Tailscale">
-    <option value="all">Все сервисы</option><option value="on">Доступ включён</option><option value="off">Доступ выключен</option>
-  </select>
+  <div class="select-field">
+    <select id="service-filter" aria-label="Доступ через Tailscale">
+      <option value="all">Все сервисы</option><option value="on">Доступ включён</option><option value="off">Доступ выключен</option>
+    </select>
+    <img src="/static/chevron-down.svg" alt="" width="16" height="16" aria-hidden="true">
+  </div>
   <div class="inventory-sync"><span class="sync-time">Обновлено <time>{{ inventory.updated_at or '—' }}</time></span><button type="button" class="icon-button" id="inventory-refresh" title="Обновить список" aria-label="Обновить список"><img src="/static/refresh-cw.svg" alt="" width="16" height="16"></button></div>
 </div>
 <div class="guest-groups">

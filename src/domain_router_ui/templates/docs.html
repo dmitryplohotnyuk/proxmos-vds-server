@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Документация · Domain Router{% endblock %}
 {% block content %}
-<div class="page-heading"><h1>Документация</h1><a class="button button-primary" href="/routes/new"><img src="/static/plus.svg" alt="" width="16" height="16">Добавить маршрут</a></div>
+<div class="page-heading"><h1>Документация</h1>{% if access_guide %}<a class="button" href="/access"><img src="/static/key-round.svg" alt="" width="16" height="16">Доступы</a>{% else %}<a class="button button-primary" href="/routes/new"><img src="/static/plus.svg" alt="" width="16" height="16">Добавить маршрут</a>{% endif %}</div>
+<nav class="docs-topics" aria-label="Темы документации"><a href="/docs" {% if not access_guide %}aria-current="page"{% endif %}>Cloudflare и домены</a><a href="/docs/access" {% if access_guide %}aria-current="page"{% endif %}>Хранилище и доступы</a></nav>
 <div class="docs-layout">
   <aside class="docs-sidebar" aria-label="Содержание">
-    <strong>Подключение домена</strong>
+    <strong>{{ 'Хранилище и доступы' if access_guide else 'Подключение домена' }}</strong>
     <nav id="docs-toc" aria-label="Разделы инструкции"></nav>
-    <a class="docs-external" href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Открыть Cloudflare ↗</a>
+    {% if access_guide %}{% if vault_url %}<a class="docs-external" href="{{ vault_url }}" target="_blank" rel="noreferrer">Открыть хранилище ↗</a>{% endif %}{% else %}<a class="docs-external" href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Открыть Cloudflare ↗</a>{% endif %}
   </aside>
   <article class="docs-article">{{ guide_html|safe }}</article>
 </div>

@@ -112,6 +112,16 @@ sudo ./scripts/create-adguard-lxc.sh
 [`docs/14-integration-manager.md`](docs/14-integration-manager.md).
 Основной deploy-сценарий сам не создаёт дополнительный шлюз.
 
+Хранилище паролей разворачивается отдельно в CT 108; вкладка **Доступы** хранит
+только ссылки/логины и использует автоматическую инвентаризацию. Инструкции
+установки, ограниченного первичного signup, Bitwarden CLI и age-backup:
+[`docs/16-access-vault.md`](docs/16-access-vault.md). Универсальная смена паролей
+из веб-панели не реализована. Отдельный `configure-root-ssh.py` предназначен только
+для явно согласованной первоначальной настройки SSH, не для фоновой ротации.
+
+Комплексный аудит, оставшиеся риски и ежедневный шифрованный backup настроек:
+[`docs/17-system-audit.md`](docs/17-system-audit.md).
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'

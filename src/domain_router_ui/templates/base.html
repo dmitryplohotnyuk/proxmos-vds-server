@@ -16,8 +16,9 @@
     <nav class="nav" aria-label="Основная навигация">
       <a href="/" {% if request.url.path == '/' or request.url.path.startswith('/routes') %}aria-current="page"{% endif %}><img src="/static/route.svg" alt="" width="16" height="16">Маршруты</a>
       <a href="/internal" {% if request.url.path.startswith('/internal') %}aria-current="page"{% endif %}><img src="/static/network.svg" alt="" width="16" height="16">Внутренние адреса</a>
-      <a href="/integrations" {% if request.url.path == '/integrations' %}aria-current="page"{% endif %}><img src="/static/network.svg" alt="" width="16" height="16">Подключения</a>
-      <a href="/docs" {% if request.url.path == '/docs' %}aria-current="page"{% endif %}><img src="/static/scroll-text.svg" alt="" width="16" height="16">Документация</a>
+      <a href="/access" {% if request.url.path.startswith('/access') %}aria-current="page"{% endif %}><img src="/static/key-round.svg" alt="" width="16" height="16">Доступы</a>
+      <a href="/integrations" {% if request.url.path == '/integrations' %}aria-current="page"{% endif %}><img src="/static/plug.svg" alt="" width="16" height="16">Подключения</a>
+      <a href="/docs" {% if request.url.path.startswith('/docs') %}aria-current="page"{% endif %}><img src="/static/scroll-text.svg" alt="" width="16" height="16">Документация</a>
       <a href="/audit" {% if request.url.path == '/audit' %}aria-current="page"{% endif %}><img src="/static/scroll-text.svg" alt="" width="16" height="16">Журнал</a>
       <a href="/account" {% if request.url.path == '/account' %}aria-current="page"{% endif %}><img src="/static/settings.svg" alt="" width="16" height="16">Профиль</a>
       <form method="post" action="/logout">

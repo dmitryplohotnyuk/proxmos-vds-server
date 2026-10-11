@@ -1,5 +1,8 @@
 # Domain Router LXC
 
+Последний комплексный аудит и backup управляющей части:
+[17-system-audit.md](17-system-audit.md).
+
 Документация проекта LXC-контейнера, который принимает домены и прокидывает их на VM/LXC внутри Proxmox.
 
 Цель: подключить сервер к интернету в любой сети, включая NAT/CGNAT, и сохранить рабочую публикацию доменов без перенастройки приложений внутри виртуальных машин.
@@ -59,6 +62,7 @@ Proxmox host: 192.168.0.176
 - [13-cloudflare-domain-guide.md](13-cloudflare-domain-guide.md) - подключение домена к Cloudflare и маршрутам; вкладка Документация в админке.
 - [14-integration-manager.md](14-integration-manager.md) - настройка Cloudflare Tunnel и подключений Tailscale из админки, безопасность и восстановление.
 - [15-repository-audit.md](15-repository-audit.md) - аудит полноты, исправления, проверки и оставшиеся ограничения воспроизводимости.
+- [16-access-vault.md](16-access-vault.md) - отдельный Vaultwarden, привязки доступов, сохранение через CLI и шифрованные backups; без смены паролей.
 
 ## Текущее состояние
 

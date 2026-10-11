@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+
 import hmac
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qs
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -14,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 from domain_router_services.integrations import IntegrationError, valid_credentials
 
 from .config import AppSettings, default_settings
+from .access import METHODS, access_groups, access_rows, validate_link, vault_origin
 from .database import AuthenticatedSession, Database
 from .router_client import RouterClient, RouterClientError
 from .service_client import ServiceClient, ServiceClientError
@@ -37,6 +41,8 @@ NOTICE_MESSAGES = {
     "service-enabled": "Доступ к сервису через Tailscale включён.",
     "service-disabled": "Доступ к сервису через Tailscale выключен.",
     "integration-updated": "Операция выполнена. Проверьте состояние подключения ниже.",
+    "access-saved": "Привязка сохранена. Пароль в сервисе не изменялся.",
+    "access-removed": "Привязка удалена. Запись в хранилище и сам сервис не изменены.",
 }
 
 
@@ -61,6 +67,7 @@ def create_app(
     service_client: ServiceClient | None = None,
 ) -> FastAPI:
     config = settings or default_settings()
+    vault_url = vault_origin(config.vault_url)
     database = Database(config.database_path)
     router = router_client or RouterClient(config.router_command)
     services = service_client or ServiceClient(config.service_command)
@@ -80,6 +87,13 @@ def create_app(
     app.state.router = router
     app.state.settings = config
     app.state.services = services
+
+    # Argon2 uses 64 MiB per operation: keep hashing off the event loop and bounded.
+    password_slots = asyncio.Semaphore(2)
+
+    async def password_operation(operation, *args):
+        async with password_slots:
+            return await run_in_threadpool(operation, *args)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -136,11 +150,17 @@ def create_app(
         return {"status": "ok"}
 
     @app.get("/docs", response_class=HTMLResponse)
+    @app.get("/docs/access", response_class=HTMLResponse)
     async def documentation(request: Request):
         session = session_for(request)
         if session is None:
             return login_redirect()
-        return template(request, "docs.html", session=session, guide_html=guide_html)
+        access_guide = request.url.path == '/docs/access'
+        rendered = MarkdownIt('default', {'html': False}).render(
+            (PACKAGE_DIR / 'help' / 'access.md').read_text(encoding='utf-8')
+        ) if access_guide else guide_html
+        return template(request, "docs.html", session=session, guide_html=rendered,
+                        access_guide=access_guide, vault_url=vault_url)
 
     async def integrations_page(request, session, *, error=None, status_code=200):
         try:
@@ -175,7 +195,7 @@ def create_app(
             return await integrations_page(request, session, error="Подтвердите выбранную операцию.", status_code=400)
         if database.login_is_limited(session.username, config.login_window_minutes, config.login_max_attempts):
             return await integrations_page(request, session, error="Проверка пароля временно ограничена.", status_code=429)
-        user = await run_in_threadpool(database.verify_user, session.username, form.get('current_password', ''))
+        user = await password_operation(database.verify_user, session.username, form.get('current_password', ''))
         if user is None:
             database.record_login_failure(session.username)
             database.audit(session.user_id, action, "integration", target, "denied")
@@ -253,7 +273,7 @@ def create_app(
                 error="Вход временно ограничен. Повторите попытку позже.",
                 status_code=429,
             )
-        user = database.verify_user(username, form.get("password", ""))
+        user = await password_operation(database.verify_user, username, form.get("password", ""))
         if user is None:
             database.record_login_failure(username)
             database.audit(None, "login", "session", username, "failed")
@@ -565,6 +585,108 @@ def create_app(
             return login_redirect()
         return await internal_page(request, session)
 
+    async def access_inventory():
+        try:
+            return await run_in_threadpool(services.inventory)
+        except ServiceClientError:
+            return {'services': [], 'errors': ['Инвентаризация недоступна. Сохранённые привязки доступны.']}
+
+    @app.get('/access', response_class=HTMLResponse)
+    async def access_get(request: Request):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        inventory = await access_inventory()
+        links = database.access_links()
+        rows = access_rows(inventory, links, vault_url)
+        query = request.query_params.get('q', '').strip()[:120]
+        scope = request.query_params.get('scope', 'accounts')
+        if scope not in ('accounts', 'unlinked', 'ssh', 'all'):
+            scope = 'accounts'
+        groups = access_groups(rows)
+        for group in groups:
+            for row in group['rows']:
+                row['visible'] = (scope == 'all' or (scope == 'accounts' and bool(row['id']))
+                    or (scope == 'unlinked' and row['method'] != 'none' and not row['vault_item_id'])
+                    or (scope == 'ssh' and row['target'] and row['target']['name'] == 'SSH'))
+                row['visible'] = bool(row['visible'] and query.casefold() in row['search_text'])
+            group['visible'] = any(row['visible'] for row in group['rows'])
+        return template(request, 'access.html', session=session, rows=rows, query=query,
+                        groups=groups, scope=scope, visible_count=sum(row['visible'] for row in rows),
+                        inventory=inventory, vault_url=vault_url, links_count=len(links),
+                        linked_count=sum(bool(link['vault_item_id']) for link in links))
+
+    async def access_form(request, session, identifier='', values=None, error=None, status_code=200):
+        existing = database.access_link(identifier) if identifier else None
+        if identifier and not existing:
+            return HTMLResponse('Привязка не найдена.', status_code=404)
+        inventory = await access_inventory()
+        values = values if values is not None else existing or {
+            'target_id': request.query_params.get('target_id', ''), 'method': 'password',
+            'title': '', 'username': '', 'vault_item_id': '',
+        }
+        targets = {item['id']: item for item in inventory['services']}
+        if not existing and not values.get('title') and values.get('target_id') in targets:
+            target = targets[values['target_id']]
+            values['title'] = target['guest_name'] + ' / ' + target['name']
+        return template(request, 'access_form.html', session=session, values=values,
+                        existing=existing, identifier=identifier, targets=targets, methods=METHODS,
+                        vault_url=vault_url, inventory=inventory, error=error, status_code=status_code,
+                        csrf=csrf_token(session.csrf_secret, 'access:save:' + identifier),
+                        remove_csrf=csrf_token(session.csrf_secret, 'access:remove:' + identifier))
+
+    @app.get('/access/new', response_class=HTMLResponse)
+    @app.get('/access/edit/{identifier}', response_class=HTMLResponse)
+    async def access_edit_get(request: Request, identifier: str = ''):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        return await access_form(request, session, identifier)
+
+    @app.post('/access/new', response_class=HTMLResponse)
+    @app.post('/access/edit/{identifier}', response_class=HTMLResponse)
+    async def access_edit_post(request: Request, identifier: str = ''):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        form = await form_data(request)
+        error = csrf_or_error(session, 'access:save:' + identifier, form.get('csrf_token', ''))
+        if error:
+            return await access_form(request, session, identifier, error=error, status_code=400)
+        existing = database.access_link(identifier) if identifier else None
+        if identifier and not existing:
+            return HTMLResponse('Привязка не найдена.', status_code=404)
+        inventory = await access_inventory()
+        try:
+            values = validate_link(form, {item['id']: item for item in inventory['services']}, existing)
+            if values['vault_item_id'] and not vault_url:
+                raise ValueError('Адрес хранилища ещё не настроен администратором.')
+        except ValueError as exc:
+            # Never echo submitted fields: they may contain an accidentally pasted password.
+            return await access_form(request, session, identifier, error=str(exc), status_code=400)
+        saved_id = identifier or str(uuid4())
+        if not database.save_access_link(saved_id, values, form.get('expected', '') if existing else None):
+            return await access_form(request, session, identifier,
+                                     error='Привязка уже изменена. Проверьте актуальные данные.', status_code=409)
+        database.audit(session.user_id, 'link', 'access', saved_id, 'success')
+        return RedirectResponse('/access?notice=access-saved', status_code=303)
+
+    @app.post('/access/remove/{identifier}')
+    async def access_remove(request: Request, identifier: str):
+        session = session_for(request)
+        if session is None:
+            return login_redirect()
+        form = await form_data(request)
+        if (not valid_csrf(session.csrf_secret, 'access:remove:' + identifier, form.get('csrf_token', ''))
+                or form.get('confirm') != 'yes'):
+            return await access_form(request, session, identifier,
+                                     error='Подтвердите удаление привязки.', status_code=400)
+        if not database.remove_access_link(identifier, form.get('expected', '')):
+            return await access_form(request, session, identifier,
+                                     error='Привязка уже изменена. Обновите страницу.', status_code=409)
+        database.audit(session.user_id, 'unlink', 'access', identifier, 'success')
+        return RedirectResponse('/access?notice=access-removed', status_code=303)
+
     @app.post('/internal/toggle', response_class=HTMLResponse)
     async def internal_toggle(request: Request):
         session = session_for(request)
@@ -627,7 +749,7 @@ def create_app(
             error = "Новый пароль и подтверждение не совпадают."
         if error is None:
             try:
-                changed = database.change_password(
+                changed = await password_operation(database.change_password,
                     session.user_id,
                     form.get("current_password", ""),
                     form.get("new_password", ""),

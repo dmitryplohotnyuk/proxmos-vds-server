@@ -34,6 +34,14 @@ fi
 
 root_password=${CONTENT_FACTORY_ROOT_PASSWORD:-$(openssl rand -hex 14)}
 password_hash=$(printf '%s\n' "$root_password" | openssl passwd -6 -stdin)
+vault_receipt=''
+if [[ ${CONTENT_FACTORY_SAVE_TO_VAULT:-0} == 1 ]]; then
+    [[ -n ${VAULTWARDEN_URL:-} ]] || die "VAULTWARDEN_URL is required for vault capture"
+    # Save before provisioning: failed/locked vault must not leave an unrecorded credential on a VM.
+    vault_receipt=$(printf '%s' "$root_password" | python3 "$SCRIPT_DIR/vault-save.py" \
+        --server "$VAULTWARDEN_URL" --name "$VM_NAME / root" --username root \
+        --uri "ssh://${VM_IP%/*}")
+fi
 
 log "Downloading and verifying Ubuntu Server 24.04 cloud image"
 install -d -m 0755 "$IMAGE_DIR"
@@ -90,8 +98,12 @@ cat <<EOF
 
 VM $VMID started.
 SSH: ssh root@${VM_IP%/*}
-One-time generated root password: $root_password
 
 Wait for cloud-init before use. Verify from Proxmox with:
   qm guest exec $VMID -- cloud-init status --long
 EOF
+if [[ -n $vault_receipt ]]; then
+    printf 'Credential saved in vault (metadata only): %s\n' "$vault_receipt"
+else
+    printf 'One-time generated root password: %s\n' "$root_password"
+fi

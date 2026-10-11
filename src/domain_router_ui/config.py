@@ -19,6 +19,7 @@ class AppSettings:
     login_max_attempts: int = 5
     secure_cookies: bool = True
     service_command: tuple[str, ...] = ()
+    vault_url: str = ""
 
 
 def default_settings() -> AppSettings:
@@ -34,6 +35,7 @@ def default_settings() -> AppSettings:
         ),
         router_command=tuple(command),
         service_command=tuple(shlex.split(os.environ.get('DOMAIN_ROUTER_SERVICE_COMMAND', ''))),
+        vault_url=os.environ.get("DOMAIN_ROUTER_VAULT_URL", "").rstrip("/"),
         session_hours=int(os.environ.get("DOMAIN_ROUTER_UI_SESSION_HOURS", "12")),
         login_window_minutes=int(
             os.environ.get("DOMAIN_ROUTER_UI_LOGIN_WINDOW_MINUTES", "15")

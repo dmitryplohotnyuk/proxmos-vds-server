@@ -13,6 +13,7 @@ from markdown_it import MarkdownIt
 ROOT = Path(__file__).resolve().parents[1]
 PATTERNS = {
     "private-key": re.compile(r"-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----"),
+    "age-identity": re.compile("AGE-SECRET-" + r"KEY-1[A-Z0-9]{58}"),
     "tailscale-key": re.compile(r"tskey-(?:auth|api|client)-[A-Za-z0-9_-]{16,}"),
     "github-token": re.compile(r"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})"),
     "cloudflare-secret": re.compile(r'''["']TunnelSecret["']\s*:\s*["'][A-Za-z0-9+/=]{32,}["']'''),

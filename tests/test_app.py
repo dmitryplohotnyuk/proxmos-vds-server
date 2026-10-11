@@ -86,6 +86,39 @@ def login(test_client: TestClient) -> None:
     assert response.status_code == 303
 
 
+def test_password_work_does_not_run_on_event_loop(client, monkeypatch):
+    import threading
+    test_client, _, database = client
+    database = test_client.app.state.database
+    worker_threads = []
+    original = database.verify_user
+
+    def verify(*args):
+        worker_threads.append(threading.get_ident())
+        return original(*args)
+
+    async def loop_thread():
+        return {'thread': threading.get_ident()}
+
+    test_client.app.add_api_route('/test-loop-thread', loop_thread)
+    monkeypatch.setattr(database, 'verify_user', verify)
+    login(test_client)
+    event_loop = test_client.get('/test-loop-thread').json()['thread']
+    assert worker_threads and all(thread != event_loop for thread in worker_threads)
+
+    def change(*args):
+        worker_threads.append(threading.get_ident())
+        return False
+
+    monkeypatch.setattr(database, 'change_password', change)
+    page = test_client.get('/account')
+    response = test_client.post('/account', data=dict(
+        csrf_token=hidden_token(page.text), current_password='wrong',
+        new_password='another strong password', confirm_password='another strong password'))
+    assert response.status_code == 400
+    assert len(worker_threads) == 2 and all(thread != event_loop for thread in worker_threads)
+
+
 def test_authentication_and_security_headers(client) -> None:
     test_client, _, _ = client
     assert test_client.get("/", follow_redirects=False).status_code == 303

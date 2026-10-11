@@ -1,0 +1,8 @@
+[Unit]
+Description=Watch bounded Vaultwarden registration
+[Timer]
+OnBootSec=20s
+OnUnitActiveSec=15s
+AccuracySec=1s
+[Install]
+WantedBy=timers.target

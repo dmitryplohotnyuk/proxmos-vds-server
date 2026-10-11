@@ -1,0 +1,8 @@
+[Unit]
+Description=Encrypted Domain Router and gateway configuration backup
+After=pve-guests.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/control-plane-backup
+UMask=0077
+TimeoutStartSec=180

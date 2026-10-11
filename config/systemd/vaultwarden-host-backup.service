@@ -1,0 +1,7 @@
+[Unit]
+Description=Encrypted Vaultwarden backup from CT 108 to Proxmox storage
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vaultwarden-host-backup
+UMask=0077
+TimeoutStartSec=180

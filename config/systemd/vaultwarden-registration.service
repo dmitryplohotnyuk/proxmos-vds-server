@@ -1,0 +1,6 @@
+[Unit]
+Description=Close Vaultwarden signup after first account or timeout
+After=vaultwarden.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vaultwarden-registration check

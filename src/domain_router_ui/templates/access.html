@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% macro counted(number, one, few, many) -%}{{ number }} {{ many if 11 <= number % 100 <= 14 else (one if number % 10 == 1 else (few if 2 <= number % 10 <= 4 else many)) }}{%- endmacro %}
+{% block title %}Доступы · Domain Router{% endblock %}
+{% block content %}
+<section class="page-heading inventory-heading">
+  <div><h1>Доступы</h1><div class="inventory-totals"><span>{{ counted(links_count, 'учётная запись', 'учётные записи', 'учётных записей') }}</span><span class="access-total">{{ linked_count }} привязано к хранилищу</span></div></div>
+  <div class="form-actions">{% if vault_url %}<a class="button" href="{{ vault_url }}" target="_blank" rel="noreferrer"><img src="/static/key-round.svg" alt="" width="16" height="16">Хранилище<img src="/static/external-link.svg" alt="" width="14" height="14"></a>{% endif %}<a class="button button-primary" href="/access/new"><img src="/static/plus.svg" alt="" width="16" height="16">Добавить</a></div>
+</section>
+{% if not vault_url %}<div class="alert alert-warning" role="status">Хранилище ещё не подключено.</div>{% endif %}
+{% for warning in inventory.errors %}<div class="alert alert-warning" role="status">{{ warning }}</div>{% endfor %}
+<form class="inventory-filters" id="access-filters" method="get" action="/access">
+  <div class="search-field"><img src="/static/search.svg" alt="" width="16" height="16"><input type="search" name="q" value="{{ query }}" aria-label="Поиск доступов" placeholder="Сервис, узел, логин или IP" maxlength="120"></div>
+  <div class="select-field"><select name="scope" aria-label="Показать доступы">{% for value, label in [('accounts', 'Учётные записи'), ('ssh', 'SSH-сервисы'), ('unlinked', 'Без привязки'), ('all', 'Все сервисы')] %}<option value="{{ value }}" {% if scope == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><img src="/static/chevron-down.svg" alt="" width="16" height="16" aria-hidden="true"></div>
+  <button class="icon-button" type="submit" title="Найти" aria-label="Найти"><img src="/static/search.svg" alt="" width="16" height="16"></button><span class="access-muted" id="access-results" role="status" aria-live="polite">Найдено: {{ visible_count }}</span>
+</form>
+<div class="guest-groups access-groups">
+{% for group in groups %}
+<details class="guest-group" data-access-group="{{ group.key }}" {% if query %}open{% endif %} {% if not group.visible %}hidden{% endif %}>
+  <summary class="guest-summary">
+    <div class="guest-identity"><img class="guest-chevron" src="/static/chevron-right.svg" alt="" width="16" height="16"><span class="guest-symbol"><img src="/static/{{ 'server' if group.kind else 'key-round' }}.svg" alt="" width="20" height="20"></span><div><h2>{{ group.guest_name }}</h2><span class="guest-meta">{% if group.kind == 'manual' %}Ручной узел{% elif group.kind %}{{ 'LXC' if group.kind == 'lxc' else 'VM' }} {{ group.vmid }}<span class="guest-state {{ 'running' if group.guest_status == 'running' else '' }}">{{ 'Работает' if group.guest_status == 'running' else 'Остановлен' }}</span>{% elif group.missing %}Сервис отсутствует в инвентаризации{% else %}Без привязки к узлу{% endif %}</span></div></div>
+    <div class="guest-addresses">{% if group.address %}<div class="guest-address"><span>IP</span><code>{{ group.address }}</code><button type="button" class="icon-button" data-copy="{{ group.address }}" title="Копировать IP" aria-label="Копировать IP {{ group.guest_name }}"><img src="/static/copy.svg" alt="" width="16" height="16"></button></div>{% if group.lan_address %}<div class="guest-lan"><span>LAN</span><code>{{ group.lan_address }}</code></div>{% endif %}{% endif %}</div>
+    <div class="guest-counts"><span>{{ counted(group.account_count, 'запись', 'записи', 'записей') }}</span><span class="enabled-count">{{ group.linked_count }} в хранилище</span></div>
+  </summary>
+  <div class="guest-content"><table class="access-table inventory-table"><thead><tr><th>Сервис / доступ</th><th>Учётная запись</th><th>Способ входа</th><th>Хранилище</th><th class="actions-heading">Действия</th></tr></thead><tbody>
+{% for row in group.rows %}<tr data-access-row data-search="{{ row.search_text }}" data-account="{{ 'yes' if row.id else 'no' }}" data-linked="{{ 'yes' if row.vault_item_id or row.method == 'none' else 'no' }}" data-ssh="{{ 'yes' if row.target and row.target.name == 'SSH' else 'no' }}" {% if not row.visible %}hidden{% endif %}>
+  <td data-label="Сервис"><strong>{{ row.title }}</strong><span class="access-subtitle">{% if row.target %}{{ row.target.name }} · <code>{{ row.target.port }}</code>{% if row.target.stale %} · Нет свежих данных{% elif row.target.reachable == false %} · Порт не отвечает{% endif %}{% if not row.target.enabled %} · Tailscale-доступ выключен{% endif %}{% elif row.missing %}Сервис отсутствует в инвентаризации{% else %}Внешняя / ручная запись{% endif %}</span></td>
+  <td data-label="Учётная запись"><code>{{ row.username or '—' }}</code></td>
+  <td data-label="Способ входа">{{ row.method_label }}</td>
+  <td data-label="Хранилище">{% if row.vault_link %}<a href="{{ row.vault_link }}" target="_blank" rel="noreferrer" class="service-open">Запись<img src="/static/external-link.svg" alt="" width="14" height="14"></a>{% elif row.method == 'none' %}<span class="access-muted">Не требуется</span>{% elif row.method == 'sso' and not row.vault_item_id %}<span class="access-muted">Внешняя авторизация</span>{% else %}<span class="access-muted">Не привязано</span>{% endif %}</td>
+  <td data-label="Действия"><div class="row-actions">{% if row.ssh_command %}<button type="button" class="icon-button" data-copy="{{ row.ssh_command }}" title="Копировать SSH-команду" aria-label="Копировать SSH-команду {{ row.title }}"><img src="/static/copy.svg" alt="" width="16" height="16"></button>{% endif %}{% if row.id %}<a class="icon-button" href="/access/edit/{{ row.id }}" title="Изменить привязку" aria-label="Изменить привязку {{ row.title }}"><img src="/static/square-pen.svg" alt="" width="16" height="16"></a>{% else %}<a class="icon-button" href="/access/new?target_id={{ row.target_id|urlencode }}" title="Добавить учётную запись" aria-label="Добавить учётную запись {{ row.title }}"><img src="/static/plus.svg" alt="" width="16" height="16"></a>{% endif %}</div></td>
+</tr>{% endfor %}
+</tbody></table></div>
+</details>
+{% endfor %}
+</div>
+<div class="inventory-empty" id="access-empty" {% if visible_count %}hidden{% endif %}>Ничего не найдено.</div>
+<div id="copy-status" role="status" class="copy-status" aria-live="polite"></div>
+{% endblock %}
+{% block scripts %}<script src="/static/access.js" defer></script>{% endblock %}

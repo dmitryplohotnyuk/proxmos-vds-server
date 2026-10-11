@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Учётная запись · Domain Router{% endblock %}
+{% block content %}
+<section class="content-narrow"><a class="back-link" href="/access">Назад к доступам</a><div class="page-heading"><h1>{{ 'Привязка учётной записи' if existing else 'Новая учётная запись' }}</h1></div>
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+{% for warning in inventory.errors %}<div class="alert alert-warning">{{ warning }}</div>{% endfor %}
+<form class="form-stack form-panel" method="post" action="{{ '/access/edit/' ~ identifier if existing else '/access/new' }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">{% if existing %}<input type="hidden" name="expected" value="{{ existing.updated_at }}">{% endif %}
+  <label><span>Сервис</span><div class="select-field access-select"><select name="target_id"><option value="">Внешняя / ручная запись</option>{% if existing and existing.target_id and existing.target_id not in targets %}<option value="{{ existing.target_id }}" selected>Сервис отсутствует в инвентаризации</option>{% endif %}{% for id, target in targets.items() %}<option value="{{ id }}" {% if values.target_id == id %}selected{% endif %}>{{ target.guest_name }} / {{ target.name }} · {{ target.port }}</option>{% endfor %}</select><img src="/static/chevron-down.svg" alt="" width="16" height="16"></div></label>
+  <label><span>Название</span><input name="title" value="{{ values.title }}" maxlength="120" autocomplete="off" required></label>
+  <label><span>Логин</span><input name="username" value="{{ values.username }}" maxlength="120" autocomplete="off"></label>
+  <details class="access-manual-node" {% if values.node_name %}open{% endif %}><summary>Ручной узел</summary><div class="form-stack">
+    <label><span>Название ручного узла</span><input name="node_name" value="{{ values.node_name or '' }}" maxlength="120" autocomplete="off"></label>
+    <label><span>IP ручного узла</span><input name="node_address" value="{{ values.node_address or '' }}" maxlength="45" autocomplete="off" spellcheck="false"></label>
+  </div></details>
+  <label><span>Способ входа</span><div class="select-field access-select"><select name="method">{% for key, label in methods.items() %}<option value="{{ key }}" {% if values.method == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><img src="/static/chevron-down.svg" alt="" width="16" height="16"></div></label>
+  <label><span>ID записи Vaultwarden</span><input name="vault_item_id" value="{{ values.vault_item_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxlength="36" autocomplete="off" spellcheck="false"></label>
+  <div class="form-actions"><button class="button button-primary" type="submit">Сохранить привязку</button><a class="button" href="/access">Отмена</a>{% if vault_url %}<a href="{{ vault_url }}" target="_blank" rel="noreferrer">Открыть хранилище</a>{% endif %}</div>
+</form>
+{% if existing %}<form class="access-unlink" method="post" action="/access/remove/{{ identifier }}"><input type="hidden" name="csrf_token" value="{{ remove_csrf }}"><input type="hidden" name="expected" value="{{ existing.updated_at }}"><label class="access-confirm"><input type="checkbox" name="confirm" value="yes" required><span>Удалить только привязку из Domain Router</span></label><button class="button button-danger-quiet" type="submit"><img src="/static/trash.svg" alt="" width="16" height="16">Удалить привязку</button></form>{% endif %}
+</section>
+{% endblock %}

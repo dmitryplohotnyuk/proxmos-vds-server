@@ -53,6 +53,20 @@ def form_data(client, services):
                 enabled='false', expected_enabled='true')
 
 
+def test_navigation_icons_and_native_select(ui):
+    client, _, _ = ui
+    login(client)
+    html = client.get('/internal').text
+    assert re.search(r'<a href="/internal"[^>]*><img src="/static/network.svg"', html)
+    assert re.search(r'<a href="/integrations"[^>]*><img src="/static/plug.svg"', html)
+    assert '<div class="select-field">' in html
+    assert '<select id="service-filter"' in html
+    for name in ['plug.svg', 'chevron-down.svg']:
+        response = client.get('/static/' + name)
+        assert response.status_code == 200
+        assert '<svg' in response.text
+
+
 def test_authentication_and_read_only_get(ui):
     client, services, _ = ui
     assert client.get('/internal', follow_redirects=False).status_code == 303

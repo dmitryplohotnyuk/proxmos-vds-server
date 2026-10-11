@@ -89,8 +89,59 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS login_attempt_lookup
                     ON login_attempts(username_hash, attempted_at);
+                CREATE TABLE IF NOT EXISTS access_links (
+                    id TEXT PRIMARY KEY,
+                    target_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    method TEXT NOT NULL,
+                    vault_item_id TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
+
+            columns = {row['name'] for row in connection.execute('PRAGMA table_info(access_links)')}
+            for name in ('node_name', 'node_address'):
+                if name not in columns:
+                    connection.execute(f"ALTER TABLE access_links ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
+
+    def access_links(self) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            return [dict(row) for row in connection.execute(
+                "SELECT * FROM access_links ORDER BY title COLLATE NOCASE, username COLLATE NOCASE"
+            )]
+
+    def access_link(self, identifier: str) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute("SELECT * FROM access_links WHERE id = ?", (identifier,)).fetchone()
+            return dict(row) if row else None
+
+    def save_access_link(self, identifier: str, values: dict[str, str], expected: str | None = None) -> bool:
+        with self.connect() as connection:
+            if expected is None:
+                connection.execute(
+                    "INSERT INTO access_links (id, target_id, title, username, method, vault_item_id, "
+                    "updated_at, node_name, node_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (identifier, values['target_id'], values['title'], values['username'],
+                     values['method'], values['vault_item_id'], timestamp(), values.get('node_name', ''),
+                     values.get('node_address', '')),
+                )
+                return True
+            cursor = connection.execute(
+                "UPDATE access_links SET target_id=?, title=?, username=?, method=?, "
+                "vault_item_id=?, updated_at=?, node_name=?, node_address=? WHERE id=? AND updated_at=?",
+                (values['target_id'], values['title'], values['username'], values['method'],
+                 values['vault_item_id'], utc_now().isoformat(timespec='microseconds'),
+                 values.get('node_name', ''), values.get('node_address', ''), identifier, expected),
+            )
+            return bool(cursor.rowcount)
+
+    def remove_access_link(self, identifier: str, expected: str) -> bool:
+        with self.connect() as connection:
+            return bool(connection.execute(
+                "DELETE FROM access_links WHERE id=? AND updated_at=?", (identifier, expected)
+            ).rowcount)
 
     def create_user(self, username: str, password: str) -> int:
         normalized = username.strip().lower()

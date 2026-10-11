@@ -45,6 +45,14 @@ def test_auth_url_allowlist():
         assert not manager.safe_auth_url(value)
 
 
+def test_key_expiry_is_readonly_and_handles_missing_or_invalid_data():
+    for value in [None, '', 'invalid', '2026-01-01', '0001-01-01T00:00:00Z']:
+        assert manager.key_expiry(value) == dict(key_expiry='', key_expiry_days=None)
+    result = manager.key_expiry('2000-01-01T00:00:00Z')
+    assert result['key_expiry'] == '2000-01-01 00:00 UTC'
+    assert result['key_expiry_days'] < 0
+
+
 def test_tailscale_status_redacts(monkeypatch):
     def api(method, endpoint, payload=None):
         if endpoint == 'profiles/current':

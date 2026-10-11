@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 
 STATE = Path('/var/lib/domain-router-integrations')
 ROLE_FILE = Path('/etc/domain-router-integrations/role')
@@ -106,6 +107,17 @@ def safe_auth_url(value: str) -> str:
         r'https://login\.tailscale\.com/a/[A-Za-z0-9]+/?', value) else ''
 
 
+def key_expiry(value) -> dict:
+    try:
+        expiry = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        if expiry.tzinfo is None or expiry.year <= 1:
+            raise ValueError()
+        return {'key_expiry': expiry.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+                'key_expiry_days': (expiry - datetime.now(timezone.utc)).days}
+    except (ValueError, TypeError, AttributeError):
+        return {'key_expiry': '', 'key_expiry_days': None}
+
+
 def tailscale_status() -> dict:
     data = local_api('GET', 'status?peers=false')
     prefs = local_api('GET', 'prefs')
@@ -120,7 +132,8 @@ def tailscale_status() -> dict:
             'routes': prefs.get('AdvertiseRoutes') or [],
             'tailnet': tailnet.get('MagicDNSSuffix', ''),
             'profile_present': bool(profile.get('ID')),
-            'auth_url': safe_auth_url(data.get('AuthURL', ''))}
+            'auth_url': safe_auth_url(data.get('AuthURL', '')),
+            **key_expiry(node.get('KeyExpiry'))}
 
 
 def tailscale_connect(role: str) -> dict:

@@ -26,3 +26,7 @@ id_rsa*
 tailscaled.state
 *.tar.gz
 *.tgz
+vaultwarden-data/
+vaultwarden-backups/
+*.age
+*age-identity*

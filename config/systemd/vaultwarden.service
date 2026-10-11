@@ -1,0 +1,16 @@
+[Unit]
+Description=Private Vaultwarden password vault (pinned official image)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/vaultwarden-run
+ExecStop=/usr/bin/docker stop --time 20 vaultwarden
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
