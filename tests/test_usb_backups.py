@@ -5,6 +5,8 @@ from pathlib import Path
 import threading
 import time
 import sys
+from types import SimpleNamespace
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -12,6 +14,45 @@ from urllib.request import Request, urlopen
 import pytest
 
 from proxmox_usb_backup import common, engine, recovery, web
+
+
+@pytest.mark.parametrize('utc_hour,expected', [(7, False), (8, True), (15, True), (16, False), (23, False)])
+def test_automatic_retry_only_starts_in_kyiv_daytime(utc_hour, expected):
+    moment = datetime(2026, 11, 5, utc_hour, tzinfo=timezone.utc)
+    assert engine.daytime_retry_allowed({}, moment) is expected
+
+
+def test_automatic_retry_window_follows_summer_timezone_and_rejects_invalid_bounds():
+    assert engine.daytime_retry_allowed({}, datetime(2026, 7, 5, 7, tzinfo=timezone.utc))
+    with pytest.raises(ValueError):
+        engine.daytime_retry_allowed({'auto_retry_window':{'start_hour':18,'end_hour':10}})
+
+
+@pytest.mark.parametrize('daytime,blocked', [(False, False), (True, True)])
+def test_health_does_not_retry_at_night_or_after_integrity_failure(tmp_path, monkeypatch, daytime, blocked):
+    monkeypatch.setattr(engine, 'STATE', tmp_path)
+    common.atomic_json(tmp_path/'status.json', {'auto_retry_blocked':blocked})
+    monkeypatch.setattr(engine, 'disk_status', lambda *args: {'online':True})
+    monkeypatch.setattr(engine, 'guest_inventory', lambda: [])
+    monkeypatch.setattr(engine, 'daytime_retry_allowed', lambda *args: daytime)
+
+    def command(*args):
+        assert args[:2] != ('systemctl', 'start')
+        return 'inactive' if args[-2] == 'ActiveState' else 'Sunday afternoon'
+
+    monkeypatch.setattr(engine, 'command', command)
+    engine.health({'auto_retry':True})
+
+
+def test_archive_is_flushed_before_page_cache_is_dropped(tmp_path, monkeypatch):
+    file = tmp_path/'archive'
+    file.write_bytes(b'data')
+    calls = []
+    monkeypatch.setattr(os, 'fsync', lambda *args: calls.append('fsync'))
+    monkeypatch.setattr(os, 'posix_fadvise', lambda *args: calls.append('fadvise'), raising=False)
+    monkeypatch.setattr(os, 'POSIX_FADV_DONTNEED', 4, raising=False)
+    engine.flush_file(file)
+    assert calls == ['fsync', 'fadvise']
 
 
 def test_vzdump_subprocess_can_read_unprivileged_lxc_metadata(tmp_path, monkeypatch):
@@ -89,6 +130,21 @@ def test_offline_or_wrong_uuid_never_uses_root_capacity(monkeypatch):
     assert not common.disk_status({'mount':'/not-usb','uuid':'expected'})['online']
 
 
+def test_readonly_backup_filesystem_is_not_reported_healthy(monkeypatch):
+    monkeypatch.setattr(common, 'command', lambda *args: 'expected' if args[-1] == 'UUID' else 'ro,errors=remount-ro')
+    monkeypatch.setattr(Path, 'is_mount', lambda *args: True)
+    monkeypatch.setattr(os, 'statvfs', lambda *args: pytest.fail('read-only filesystem is not ready'))
+    assert not common.disk_status({'mount':'/usb','uuid':'expected'})['online']
+
+
+def test_readonly_health_sandbox_does_not_mask_writable_host_filesystem(monkeypatch):
+    monkeypatch.setattr(common, 'command', lambda *args: 'expected' if args[-1] == 'UUID' else 'rw,errors=remount-ro')
+    monkeypatch.setattr(Path, 'is_mount', lambda *args: True)
+    monkeypatch.setattr(os, 'statvfs', lambda *args: SimpleNamespace(
+        f_flag=os.ST_RDONLY, f_blocks=100, f_frsize=4096, f_bavail=90, f_bfree=90))
+    assert common.disk_status({'mount':'/usb','uuid':'expected'})['online']
+
+
 def test_hardlink_publication_and_pruning_preserve_unrelated_data(tmp_path, monkeypatch):
     old, old_manifest = completed(tmp_path, '20261101T120000Z')
     new, manifest = completed(tmp_path, '20261105T120000Z')
@@ -114,7 +170,8 @@ def test_hardlink_publication_and_pruning_preserve_unrelated_data(tmp_path, monk
     assert (dump/renamed.name).exists()
 
 
-def test_failed_new_verification_never_prunes_previous_set(tmp_path, monkeypatch):
+@pytest.mark.parametrize('cleanup_fails', [False, True])
+def test_failed_archive_creation_never_prunes_previous_set(tmp_path, monkeypatch, cleanup_fails):
     old, _ = completed(tmp_path)
     state = tmp_path / 'state'
     common.atomic_json(state/'status.json', {'last_success':{'id':old.name}})
@@ -132,14 +189,17 @@ def test_failed_new_verification_never_prunes_previous_set(tmp_path, monkeypatch
     def fake_backup(args, **kwargs):
         folder = Path(args[args.index('--dumpdir')+1])
         (folder/'vzdump-lxc-100-2026_11_05-12_00_00.tar.zst').write_bytes(b'broken')
+        raise ValueError('archive failure')
 
     monkeypatch.setattr(runner, 'long', fake_backup)
-    monkeypatch.setattr(runner, 'verify_archive', lambda *args:(_ for _ in ()).throw(ValueError('bad archive')))
-    with pytest.raises(ValueError):
+    if cleanup_fails:
+        monkeypatch.setattr(engine.shutil, 'rmtree', lambda *args: (_ for _ in ()).throw(OSError('USB I/O failure')))
+    with pytest.raises(ValueError, match='archive failure'):
         runner.perform()
     assert old.exists()
     assert common.read_json(state/'status.json')['last_success']['id'] == old.name
-    assert not list((tmp_path/'.staging').iterdir())
+    assert bool(list((tmp_path/'.staging').iterdir())) == cleanup_fails
+    assert bool(common.read_json(state/'status.json').get('cleanup_warning')) == cleanup_fails
 
 
 def test_corrupt_new_set_blocks_pruning_before_any_delete(tmp_path, monkeypatch):
@@ -149,6 +209,44 @@ def test_corrupt_new_set_blocks_pruning_before_any_delete(tmp_path, monkeypatch)
     with pytest.raises(ValueError):
         engine.prune_sets(tmp_path,new.name)
     assert old.exists()
+
+
+@pytest.mark.parametrize('native_failure', [False, True])
+def test_integrity_failure_preserves_evidence_and_previous_success(tmp_path, monkeypatch, native_failure):
+    old, _ = completed(tmp_path, '20261101T120000Z')
+    state = tmp_path/'state'
+    common.atomic_json(state/'status.json', {'last_success':{'id':old.name}})
+    monkeypatch.setattr(engine, 'STATE', state)
+    guest = dict(id=100,kind='lxc',name='router',config={},config_sha256='a')
+    monkeypatch.setattr(engine, 'guest_inventory', lambda:[guest])
+    monkeypatch.setattr(engine, 'exclusions', lambda *args:[])
+    monkeypatch.setattr(engine, 'estimate_bytes', lambda *args:10)
+    monkeypatch.setattr(engine, 'check_space', lambda *args:None)
+    monkeypatch.setattr(engine, 'disk_status', lambda *args:{'online':True})
+    monkeypatch.setattr(engine, 'command', lambda *args:'[]' if args[0]=='pvesh' else 'pve-manager/9.2.4')
+    kit = tmp_path/'kit'
+    (kit/'proxmox_usb_backup').mkdir(parents=True)
+    (kit/'proxmox_usb_backup/recovery.py').write_text('code')
+    monkeypatch.setattr(engine, 'RECOVERY_KIT', kit)
+    runner = engine.Runner({'mount':str(tmp_path),'uuid':'test','allowed_exclusions':{},'bwlimit_kib':100})
+
+    def backup(args, **kwargs):
+        folder = Path(args[args.index('--dumpdir')+1])
+        (folder/'vzdump-lxc-100-2026_11_05-12_00_00.tar.zst').write_bytes(b'archive')
+
+    monkeypatch.setattr(runner, 'long', backup)
+    def verify(*args):
+        if native_failure:
+            raise ValueError('Checksum mismatch')
+    monkeypatch.setattr(runner, 'verify_archive', verify)
+    monkeypatch.setattr(runner, 'host_snapshot', lambda path, manifest:path.write_bytes(b'host'))
+    monkeypatch.setattr(engine, 'load_set', lambda *args, **kwargs:(_ for _ in ()).throw(ValueError('Checksum mismatch')))
+    with pytest.raises(ValueError, match='Checksum mismatch'):
+        runner.perform()
+    assert old.exists()
+    assert list((tmp_path/'.staging').glob('*/guests/*.zst'))
+    assert common.read_json(state/'status.json')['auto_retry_blocked']
+    assert not (tmp_path/'dump').exists()
 
 
 def test_restore_id_mapping_and_no_overwrite_shape():
@@ -187,7 +285,9 @@ def test_http_identity_origin_csrf_and_fixed_action(tmp_path,monkeypatch):
         with urlopen(Request(url+'/recovery-guide',headers=headers)) as response:
             assert response.read() == b'Recovery instructions'
         with urlopen(Request(url+'/api/status',headers=headers)) as response:
-            token=json.load(response)['csrf']
+            status=json.load(response)
+            token=status['csrf']
+            assert status['proxmox_url']=='https://backup.test/'
         for origin,csrf in [('https://evil.test',token),('https://backup.test','bad')]:
             with pytest.raises(HTTPError) as error:
                 urlopen(Request(url+'/api/run',data=b'{}',headers={**headers,'Origin':origin,'X-CSRF-Token':csrf}))

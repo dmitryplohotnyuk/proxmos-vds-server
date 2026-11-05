@@ -1,8 +1,8 @@
 [Unit]
 Description=Daily encrypted control-plane configuration backup
 [Timer]
-OnCalendar=*-*-* 04:45:00
+OnCalendar=*-*-* 12:30:00 Europe/Kyiv
 RandomizedDelaySec=10m
-Persistent=true
+Persistent=false
 [Install]
 WantedBy=timers.target

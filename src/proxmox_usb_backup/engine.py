@@ -17,6 +17,7 @@ import tarfile
 import tempfile
 import time
 import uuid
+from zoneinfo import ZoneInfo
 
 from .common import (ARCHIVE, CONFIG, GENERATION, STATE, atomic_json, command, digest,
                      disk_status, exclusions, guest_inventory, load_set, now, read_json,
@@ -25,6 +26,14 @@ from .common import (ARCHIVE, CONFIG, GENERATION, STATE, atomic_json, command, d
 HOST_PATHS = ('etc', 'usr/local', 'opt/service-inventory', 'opt/proxmox-usb-backup',
               'root', 'var/lib/service-inventory', 'var/lib/service-inventory-ssh',
               'var/lib/tailscale', 'var/lib/vz/snippets')
+RECOVERY_KIT = Path('/opt/proxmox-usb-backup/recovery')
+
+
+def flush_file(path):
+    with path.open('rb') as source:
+        os.fsync(source.fileno())
+        if hasattr(os, 'posix_fadvise'):
+            os.posix_fadvise(source.fileno(), 0, 0, os.POSIX_FADV_DONTNEED)
 
 
 @contextmanager
@@ -89,7 +98,7 @@ class Runner:
             for line in self.process.stdout:
                 self.log.write(line)
                 self.log.flush()
-                if 'ERROR:' in line or 'Permission denied' in line:
+                if 'error' in line.lower() or 'Permission denied' in line:
                     last_error = line.strip()[-600:]
                 if time.monotonic() - self.last_update >= 3:
                     check_space(self.config, 0)
@@ -187,6 +196,7 @@ class Runner:
                         archive.add(path, arcname='host/' + relative, filter=safe_member)
                 archive.add(database, arcname='reference/pmxcfs-config.db')
             metadata['skipped_external_symlinks'] = skipped
+            flush_file(destination)
             with tarfile.open(destination, 'r:gz') as archive:
                 for member in archive:
                     if member.isfile():
@@ -214,10 +224,12 @@ class Runner:
         self.update(running=True, phase='guests', set_id=identifier, started_at=now(),
                     total_guests=len(guests), completed_guests=0, guest_percent=0,
                     warnings=warnings, error=None, guests=[], estimated_bytes=needed,
-                    finished_at=None, cleanup_warning=None)
+                    finished_at=None, cleanup_warning=None, auto_retry_blocked=False)
         manifest = dict(version=1, id=identifier, created_at=now(),
                         source_node=os.uname().nodename, pve_version=command('pveversion'),
-                        backup_uuid=self.config['uuid'], warnings=warnings, guests=[], files=[])
+                        backup_uuid=self.config['uuid'], bwlimit_kib=self.config['bwlimit_kib'],
+                        warnings=warnings, guests=[], files=[])
+        preserve_stage = False
         try:
             for index, guest in enumerate(guests):
                 check_space(self.config, 0)
@@ -234,8 +246,15 @@ class Runner:
                 if len(matches) != 1:
                     raise RuntimeError(f'Expected one complete archive for guest {guest["id"]}')
                 path = matches[0]
+                flush_file(path)
                 self.update(phase='verify', message='Verifying archive', guest_percent=100)
-                self.verify_archive(path, guest['kind'])
+                try:
+                    self.verify_archive(path, guest['kind'])
+                except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, tarfile.TarError):
+                    preserve_stage = True
+                    self.update(auto_retry_blocked=True,
+                                cleanup_warning='Unverified staging set preserved for inspection; hourly retries blocked')
+                    raise
                 item = dict(id=guest['id'], kind=guest['kind'], name=guest['name'],
                             archive='guests/' + path.name, bytes=path.stat().st_size,
                             verified_at=now(), config=guest['config'], was_running=running.get(guest['id'], False))
@@ -247,15 +266,14 @@ class Runner:
                 raise RuntimeError('Guest inventory/configuration changed during backup; retry without pruning')
             self.update(phase='host', current_guest=None, message='Collecting Proxmox configuration')
             self.host_snapshot(stage / 'host-config.tar.gz', manifest)
-            kit = Path('/opt/proxmox-usb-backup/recovery')
+            kit = RECOVERY_KIT
             if not (kit / 'proxmox_usb_backup/recovery.py').is_file():
                 raise RuntimeError('Portable recovery kit is missing')
             shutil.copytree(kit, stage / 'recovery', symlinks=False)
             for path in sorted(stage.rglob('*')):
                 if path.is_file():
                     path.chmod(0o600)
-                    with path.open('rb') as source:
-                        os.fsync(source.fileno())
+                    flush_file(path)
                     manifest['files'].append(dict(path=str(path.relative_to(stage)),
                                                   bytes=path.stat().st_size, sha256=digest(path)))
             manifest['completed_at'] = now()
@@ -265,7 +283,13 @@ class Runner:
                 sync_directory(directory)
             atomic_json(stage / 'manifest.json', manifest)
             atomic_json(stage / 'COMPLETE.json', dict(manifest_sha256=digest(stage / 'manifest.json')))
-            load_set(stage, verify_files=True)
+            try:
+                load_set(stage, verify_files=True)
+            except (OSError, ValueError):
+                preserve_stage = True
+                self.update(auto_retry_blocked=True,
+                            cleanup_warning='Unverified staging set preserved for inspection; hourly retries blocked')
+                raise
             check_space(self.config, 0)
             sets = self.root / 'sets'
             sets.mkdir(mode=0o700, exist_ok=True)
@@ -286,8 +310,11 @@ class Runner:
             return summary
         finally:
             # Never clean another run or a mounted replacement device after USB loss.
-            if disk_status(self.config)['online'] and stage.is_dir() and not stage.is_symlink():
-                shutil.rmtree(stage)
+            try:
+                if not preserve_stage and disk_status(self.config)['online'] and stage.is_dir() and not stage.is_symlink():
+                    shutil.rmtree(stage)
+            except OSError as error:
+                self.update(cleanup_warning='Partial set retained for inspection; cleanup failed: ' + str(error)[:250])
 
 
 def publish_archives(directory, dump, manifest):
@@ -327,6 +354,15 @@ def prune_sets(root, keep):
     sync_directory(root / 'sets')
 
 
+def daytime_retry_allowed(config, moment=None):
+    window = config.get('auto_retry_window', dict(timezone='Europe/Kyiv', start_hour=10, end_hour=18))
+    start, end = window['start_hour'], window['end_hour']
+    if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= 24:
+        raise ValueError('Invalid automatic backup start window')
+    local = (moment or datetime.now(timezone.utc)).astimezone(ZoneInfo(window['timezone']))
+    return start <= local.hour < end
+
+
 def health(config):
     disk = disk_status(config)
     active = command('systemctl', 'show', 'proxmox-usb-backup.service', '-p', 'ActiveState', '--value')
@@ -343,7 +379,9 @@ def health(config):
     due = not latest or time.time() - datetime.fromisoformat(latest).timestamp() > 7 * 86400
     last_attempt = status.get('started_at')
     retry = not last_attempt or time.time() - datetime.fromisoformat(last_attempt).timestamp() > 3600
-    if disk['online'] and due and retry and not disk['worker_active'] and config.get('auto_retry', True):
+    if (disk['online'] and due and retry and not disk['worker_active']
+            and config.get('auto_retry', True) and not status.get('auto_retry_blocked')
+            and daytime_retry_allowed(config)):
         command('systemctl', 'start', '--no-block', 'proxmox-usb-backup.service')
 
 

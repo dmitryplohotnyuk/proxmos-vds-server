@@ -5,7 +5,8 @@ source=$(realpath "$1")
 [[ -f "$source/src/proxmox_usb_backup/engine.py" && -f "$source/docs/21-usb-disaster-recovery.md" ]] || exit 1
 mount=/mnt/pve/usb-backups
 uuid=$(findmnt --mountpoint "$mount" --noheadings --output UUID)
-[[ $uuid == ca744010-53c5-4cde-846a-d66c60f4cf02 ]] || { echo 'Expected backup filesystem is not mounted' >&2; exit 1; }
+expected_uuid=${EXPECTED_BACKUP_UUID:-ca744010-53c5-4cde-846a-d66c60f4cf02}
+[[ $uuid == "$expected_uuid" ]] || { echo 'Expected backup filesystem is not mounted' >&2; exit 1; }
 for tool in python3 vzdump qmrestore pct vma zstd pvesh tailscale; do command -v "$tool" >/dev/null; done
 state=$(systemctl show proxmox-usb-backup.service -p ActiveState --value 2>/dev/null || true)
 if [[ $state == active || $state == activating || $state == deactivating ]]; then
@@ -21,7 +22,7 @@ for file in "$source"/config/systemd/proxmox-usb-backup*.service "$source"/confi
 done
 export BACKUP_UUID="$uuid"
 python3 - <<'PY'
-import json,os,subprocess
+import json,os,re,subprocess
 from pathlib import Path
 config=Path('/etc/proxmox-usb-backup/config.json')
 if config.exists():
@@ -34,12 +35,22 @@ else:
            '/mnt/immich-photos':'Фототека на этом USB требует отдельной внешней резервной копии'})
  config.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
  config.chmod(0o600)
+data.setdefault('auto_retry_window',dict(timezone='Europe/Kyiv',start_hour=10,end_hour=18))
+config.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+config.chmod(0o600)
 ui=Path('/etc/proxmox-usb-backup/ui.json')
-if not ui.exists():
- status=json.loads(subprocess.check_output(['tailscale','status','--json']))
+status=json.loads(subprocess.check_output(['tailscale','status','--json']))
+dns=status['Self'].get('DNSName','').rstrip('.')
+if not re.fullmatch(r'[A-Za-z0-9.-]+',dns) or '.' not in dns:
+ raise SystemExit('Tailscale node has no valid DNSName')
+if ui.exists():
+ ui_data=json.loads(ui.read_text())
+else:
  owner=status['User'][str(status['Self']['UserID'])]['LoginName']
- ui.write_text(json.dumps(dict(allowed_logins=[owner],origin='https://proxmox.tail6ace7f.ts.net:8443'),indent=2)+'\n')
- ui.chmod(0o644)
+ ui_data=dict(allowed_logins=[owner])
+ui_data['origin']='https://'+dns+':8443'
+ui.write_text(json.dumps(ui_data,indent=2)+'\n')
+ui.chmod(0o644)
 PY
 kit=/opt/proxmox-usb-backup/recovery
 install -d -m 0700 "$kit" "$kit/proxmox_usb_backup"
@@ -60,6 +71,7 @@ cp -a "$kit/." "$mount/recovery/"
 systemctl daemon-reload
 systemd-analyze --generators=yes verify /etc/systemd/system/proxmox-usb-backup.service /etc/systemd/system/proxmox-usb-backup-ui.service
 systemctl enable --now proxmox-usb-backup-control.service proxmox-usb-backup-ui.service
+systemctl restart proxmox-usb-backup-control.service proxmox-usb-backup-ui.service
 systemctl enable --now proxmox-usb-backup.timer proxmox-usb-backup-health.timer
 python3 - <<'PY'
 import json,subprocess
@@ -72,5 +84,6 @@ for key,value in before.get('Web',{}).items():
  if key.endswith(':443') and after.get('Web',{}).get(key)!=value: raise SystemExit('Existing Proxmox HTTPS route changed unexpectedly')
 PY
 systemctl start proxmox-usb-backup-health.service
-echo 'Dashboard: https://proxmox.tail6ace7f.ts.net:8443'
+dashboard=$(python3 -c 'import json; print(json.load(open("/etc/proxmox-usb-backup/ui.json"))["origin"])')
+echo "Dashboard: $dashboard"
 echo 'First backup starts automatically when a valid USB disk is present.'

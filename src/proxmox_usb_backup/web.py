@@ -82,6 +82,7 @@ def ui_handler(config, secret):
             if path == '/api/status':
                 self.respond(200, dict(disk=read_json(STATE / 'disk.json', {}),
                                        job=read_json(STATE / 'status.json', {}),
+                                       proxmox_url='https://' + urlsplit(config['origin']).hostname + '/',
                                        csrf=csrf_token(secret, identity)))
                 return
             if path == '/recovery-guide':

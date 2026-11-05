@@ -1,8 +1,8 @@
 [Unit]
 Description=Daily encrypted Vaultwarden backup
 [Timer]
-OnCalendar=*-*-* 04:20:00
+OnCalendar=*-*-* 12:00:00 Europe/Kyiv
 RandomizedDelaySec=15m
-Persistent=true
+Persistent=false
 [Install]
 WantedBy=timers.target

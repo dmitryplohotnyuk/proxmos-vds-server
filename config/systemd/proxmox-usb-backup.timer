@@ -2,9 +2,9 @@
 Description=Weekly verified Proxmox USB recovery set
 
 [Timer]
-OnCalendar=Sun *-*-* 03:30:00 Europe/Kyiv
+OnCalendar=Sun *-*-* 14:00:00 Europe/Kyiv
 RandomizedDelaySec=5min
-Persistent=true
+Persistent=false
 Unit=proxmox-usb-backup.service
 
 [Install]

@@ -63,6 +63,10 @@ def disk_status(config):
         uuid = command('findmnt', '--mountpoint', str(path), '--noheadings', '--output', 'UUID')
         if uuid != config['uuid'] or not path.is_mount():
             raise RuntimeError('Wrong or missing backup filesystem')
+        # ProtectSystem=strict makes the health service's VFS read-only, not the host filesystem.
+        options = command('findmnt', '--mountpoint', str(path), '--noheadings', '--output', 'FS-OPTIONS')
+        if 'ro' in options.split(','):
+            raise RuntimeError('Backup filesystem is read-only; inspect USB and filesystem health')
         stat = os.statvfs(path)
         return dict(online=True, uuid=uuid, path=str(path), checked_at=now(),
                     total_bytes=stat.f_blocks * stat.f_frsize,
@@ -93,6 +97,8 @@ def safe_path(root, relative):
 def digest(path):
     hasher = hashlib.sha256()
     with open(path, 'rb') as source:
+        if hasattr(os, 'posix_fadvise'):
+            os.posix_fadvise(source.fileno(), 0, 0, os.POSIX_FADV_DONTNEED)
         for chunk in iter(lambda: source.read(4 * 1024 * 1024), b''):
             hasher.update(chunk)
     return hasher.hexdigest()
@@ -113,8 +119,10 @@ def load_set(path, verify_files=False):
         file = safe_path(path, item['path'])
         if not file.is_file() or file.stat().st_size != item['bytes']:
             raise ValueError(f'Missing or truncated archive: {item["path"]}')
-        if verify_files and digest(file) != item['sha256']:
-            raise ValueError(f'Checksum mismatch: {item["path"]}')
+        if verify_files:
+            actual = digest(file)
+            if actual != item['sha256']:
+                raise ValueError(f'Checksum mismatch: {item["path"]}; expected {item["sha256"]}, got {actual}')
     return manifest
 
 

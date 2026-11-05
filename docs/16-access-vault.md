@@ -162,7 +162,7 @@ systemctl start vaultwarden-host-backup.service
 journalctl -u vaultwarden-host-backup.service --no-pager -n 20
 ```
 
-Копирование в 04:20 по локальному времени хоста + до 15 минут случайной задержки,
+Копирование в 12:00 Europe/Kyiv + до 15 минут случайной задержки,
 пропущенный запуск выполняется после включения. CT 108 кратко останавливает только
 Vaultwarden, архивирует согласованные `data`, `vaultwarden.env`, `image.ref` напрямую
 в age, без plaintext tar на диске, и запускает сервис. В CT retention 14 дней,

@@ -6,14 +6,14 @@
   <link rel="stylesheet" href="/assets/backup.css"><script src="/assets/backup.js" defer></script>
 </head>
 <body>
-  <header class="topbar"><div class="brand"><img src="/assets/server.svg" alt="" width="22" height="22"><span>Proxmox <strong>Backup</strong></span></div><a href="https://proxmox.tail6ace7f.ts.net/" target="_blank" rel="noreferrer">Proxmox <img src="/assets/external-link.svg" alt="" width="14" height="14"></a></header>
+  <header class="topbar"><div class="brand"><img src="/assets/server.svg" alt="" width="22" height="22"><span>Proxmox <strong>Backup</strong></span></div><a id="proxmox-link" href="/" target="_blank" rel="noreferrer">Proxmox <img src="/assets/external-link.svg" alt="" width="14" height="14"></a></header>
   <main>
     <div class="heading"><div><h1>Резервные копии</h1><div id="updated" class="muted">Подключение…</div></div><div class="actions"><a class="button secondary" href="/recovery-guide" target="_blank">Восстановление <img src="/assets/external-link.svg" alt="" width="16" height="16"></a><button id="refresh" class="icon-button" title="Обновить статус" aria-label="Обновить статус"><img src="/assets/refresh-cw.svg" alt="" width="18" height="18"></button><button id="run"><img src="/assets/plus.svg" alt="" width="18" height="18">Создать копию</button></div></div>
     <div id="notice" class="notice" role="status" hidden></div>
     <section class="summary" aria-label="Состояние резервирования">
       <div class="metric"><span class="label">USB-накопитель</span><strong id="disk-status">—</strong><span id="disk-detail" class="muted">—</span><progress id="disk-usage" max="100" value="0" aria-label="Заполненность раздела"></progress></div>
       <div class="metric"><span class="label">Последний проверенный комплект</span><strong id="last-date">—</strong><span id="last-detail" class="muted">—</span></div>
-      <div class="metric"><span class="label">Следующий запуск</span><strong id="next-run">—</strong><span class="muted">Еженедельно · воскресенье · 03:30</span></div>
+      <div class="metric"><span class="label">Следующий запуск</span><strong id="next-run">—</strong><span class="muted">Еженедельно · воскресенье · 14:00</span></div>
     </section>
     <section class="job-section"><div class="section-heading"><h2>Текущая операция</h2><span id="job-status" class="badge">—</span></div><div id="current-guest" class="job-name">—</div><progress id="job-progress" max="100" value="0" aria-label="Ход создания комплекта"></progress><div class="job-bottom"><span id="job-message" class="muted">—</span><span id="job-count" class="muted">—</span></div><div id="error" class="error" hidden></div></section>
     <section><div class="section-heading"><h2 id="guests-heading">Состав последнего комплекта</h2><span id="guest-total" class="muted"></span></div><div class="table-wrap"><table><thead><tr><th>Узел</th><th>Тип</th><th>Архив</th><th>Проверка</th></tr></thead><tbody id="guests"></tbody></table></div><div id="inventory-changes" class="muted changes"></div></section>

@@ -86,8 +86,8 @@ systemctl start control-plane-backup.service
 journalctl -u control-plane-backup.service -n 20 --no-pager
 ```
 
-Расписание: ежедневно 04:45 по времени хоста + случайные 0–10 минут,
-`Persistent=true`. Копии: `/var/lib/vz/dump/control-plane/control-plane-*.tar.age`,
+Расписание: ежедневно 12:30 Europe/Kyiv + случайные 0–10 минут,
+`Persistent=false`, чтобы missed job не догонялся ночью. Копии: `/var/lib/vz/dump/control-plane/control-plane-*.tar.age`,
 root-only, retention 30 дней после успешной новой копии. oneshot-служба после
 успешного выполнения имеет состояние `inactive (dead)`; смотрите exit status и journal.
 

@@ -2,7 +2,8 @@
 
 ## Развёрнуто 2026-11-05
 
-Samsung SSD 990 PRO 2TB подключён через Realtek RTL9210B, USB 10 Gbit/s, UAS.
+Samsung SSD 990 PRO 2TB подключён через Realtek RTL9210B, USB 10 Gbit/s.
+Первоначальный UAS заменён на usb-storage после сбоев; см. раздел совместимости ниже.
 Полная ёмкость: 2 000 398 934 016 bytes. GPT содержит ровно два ext4-раздела:
 
 | Назначение | Размер Раздела | UUID | Точка Монтирования |
@@ -155,8 +156,46 @@ mount/storage. Для этого предварительно штатно ра�
 отказа. Для резервирования фототеки нужен другой физический носитель/удалённое
 хранилище. Обычный vzdump LXC не сохраняет содержимое bind mounts; при установке
 Immich нужно отдельно защитить и файлы, и согласованную БД. Расписание и retention
-VM/LXC/host-configs остаются следующим этапом обсуждения.
+VM/LXC/host-configs реализованы отдельным [этапом 21](21-usb-disaster-recovery.md).
+
+## RTL9210B И Режим Совместимости
+
+При первом полном backup выявлен сбой UAS/xHCI при чтении на двух физических
+10-Gbit/s портах (`2-4` и `2-3`): USB reset/I/O errors и исчезновение адаптера.
+SMART Samsung 990 PRO при этом PASSED, media/data integrity errors 0, температура
+40–42 C. Это не является полной гарантией исправности SSD, но тот же архив после
+перехода на `usb-storage` прошёл zstd check за 21 секунду без нового USB-сбоя.
+
+Для конкретного Realtek VID:PID `0bda:9210` включён Linux IGNORE_UAS (`u`).
+Это меняет транспорт на USB Mass Storage, а не скорость физического USB-link:
+`lsusb -t` по-прежнему показывает 10000M. Фактическая производительность может
+быть ниже. Другие USB VID:PID, Zigbee/Meshtastic и общий xHCI не перезапускаются.
+
+Повторное применение на этом оборудовании, **только после проверки причины**:
+
+```bash
+python3 scripts/configure-usb-backup-compat.py --apply
+lsusb -t
+```
+
+Скрипт требует root и ровно один подключённый `0bda:9210`, сохраняет другие
+активные quirks, записывает `/etc/modprobe.d/proxmox-usb-backup-compat.conf` и
+обновляет штатные initramfs всех установленных kernels. Сам устройства не
+отключает и сервер не перезагружает. Если устройство ещё использует UAS,
+остановить потребителей, размонтировать оба USB-раздела и переподключить SSD.
+Нужно увидеть `Driver=usb-storage`, затем проверить filesystem и большой архив
+до возобновления записи/таймеров. Не применять quirk вслепую на другом железе.
+
+Для отмены убрать только этот modprobe-файл, обновить initramfs и проверить
+возврат UAS при следующей согласованной перезагрузке. Другие quirks не удалять.
+
+После исправления USB-обрывов один финальный SHA-check полного backup не совпал;
+это отдельный, пока не объяснённый случай. fio direct write/read с SHA-256 на
+16-GiB временном файле, тройные uncached SHA и memtester на 1 GiB прошли.
+SMART сам по себе не гарантирует целостность всего тракта и всей RAM.
+Не считать backup успешным без финального manifest check и пробного restore.
 
 Первоисточники: [systemd.mount](https://www.freedesktop.org/software/systemd/man/257/systemd.mount.html),
 [Proxmox directory storage](https://pve.proxmox.com/pve-docs/pvesm.1.html),
-[Proxmox backup limitations](https://github.com/proxmox/pve-docs/blob/master/vzdump.adoc).
+[Proxmox backup limitations](https://github.com/proxmox/pve-docs/blob/master/vzdump.adoc),
+[Linux usb-storage.quirks](https://kernel.org/doc/html/latest/admin-guide/kernel-parameters.html).
