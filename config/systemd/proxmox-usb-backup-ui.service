@@ -1,0 +1,24 @@
+[Unit]
+Description=Private USB backup dashboard
+After=network.target proxmox-usb-backup-control.service
+Wants=proxmox-usb-backup-control.service
+
+[Service]
+User=pve-backup-ui
+Group=pve-backup-ui
+Environment=PYTHONPATH=/opt/proxmox-usb-backup
+ExecStart=/usr/bin/python3 -m proxmox_usb_backup.web serve
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryMax=192M
+TasksMax=48
+
+[Install]
+WantedBy=multi-user.target

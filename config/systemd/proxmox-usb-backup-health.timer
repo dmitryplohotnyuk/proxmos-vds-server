@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh USB backup status every minute
+
+[Timer]
+OnBootSec=90
+OnUnitInactiveSec=60
+Unit=proxmox-usb-backup-health.service
+
+[Install]
+WantedBy=timers.target

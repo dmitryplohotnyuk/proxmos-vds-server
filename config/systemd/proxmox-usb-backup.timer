@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly verified Proxmox USB recovery set
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00 Europe/Kyiv
+RandomizedDelaySec=5min
+Persistent=true
+Unit=proxmox-usb-backup.service
+
+[Install]
+WantedBy=timers.target

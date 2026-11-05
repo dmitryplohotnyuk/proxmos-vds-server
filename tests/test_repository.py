@@ -1,3 +1,4 @@
+import configparser
 import importlib.util
 from pathlib import Path
 import shutil
@@ -8,6 +9,14 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("repository_check", ROOT / "scripts/check-repository.py")
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
+
+
+def test_service_inventory_refresh_interval():
+    timer = configparser.ConfigParser()
+    timer.read(ROOT / 'config/systemd/service-inventory-sync.timer')
+    assert timer['Timer']['OnUnitInactiveSec'] == '5min'
+    assert timer['Timer']['OnBootSec'] == '45'
+    assert timer['Timer']['Unit'] == 'service-inventory-sync.service'
 
 
 def test_all_local_documentation_links_resolve():

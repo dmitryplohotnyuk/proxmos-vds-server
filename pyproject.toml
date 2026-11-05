@@ -31,6 +31,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 domain_router_ui = ["templates/*.html", "help/*.md", "static/*.css", "static/*.js", "static/*.svg", "static/*LICENSE.txt"]
+proxmox_usb_backup = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

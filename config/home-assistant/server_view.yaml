@@ -1,0 +1,36 @@
+title: Сервер
+path: server
+icon: mdi:server
+show_icon_and_title: true
+type: masonry
+cards:
+  - type: vertical-stack
+    cards:
+      - type: entities
+        title: Proxmox
+        show_header_toggle: false
+        entities:
+          - entity: sensor.proxmox_rapl_power
+            name: Мощность RAPL · CPU + память
+          - entity: sensor.proxmox_inventory
+            name: Запущено VM и контейнеров
+          - entity: sensor.proxmox_last_update
+            name: Последнее обновление
+      - type: history-graph
+        title: Мощность RAPL
+        hours_to_show: 6
+        entities:
+          - entity: sensor.proxmox_rapl_power
+            name: CPU + память
+  - type: custom:proxmox-guests-card
+    title: Контейнеры
+    entity: sensor.proxmox_inventory
+    guest_type: lxc
+  - type: vertical-stack
+    cards:
+      - type: custom:proxmox-guests-card
+        title: Виртуальные машины
+        entity: sensor.proxmox_inventory
+        guest_type: vm
+      - type: custom:proxmox-storage-card
+        entity: sensor.proxmox_inventory

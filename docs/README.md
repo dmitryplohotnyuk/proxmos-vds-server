@@ -63,6 +63,11 @@ Proxmox host: 192.168.0.176
 - [14-integration-manager.md](14-integration-manager.md) - настройка Cloudflare Tunnel и подключений Tailscale из админки, безопасность и восстановление.
 - [15-repository-audit.md](15-repository-audit.md) - аудит полноты, исправления, проверки и оставшиеся ограничения воспроизводимости.
 - [16-access-vault.md](16-access-vault.md) - отдельный Vaultwarden, привязки доступов, сохранение через CLI и шифрованные backups; без смены паролей.
+- [17-system-audit.md](17-system-audit.md) - комплексный аудит, эксплуатационные риски и backup управляющей части.
+- [18-power-telemetry.md](18-power-telemetry.md) - проверка RAPL на хосте, фактические замеры и ограничения оценки мощности VM/LXC.
+- [19-home-assistant-server.md](19-home-assistant-server.md) - вкладка Сервер в HA, read-only телеметрия, автоматические статусы VM/LXC и повторная установка.
+- [20-external-usb-storage.md](20-external-usb-storage.md) - два раздела внешнего SSD для бэкапов и будущей фототеки, безопасная загрузка без USB и повторная подготовка.
+- [21-usb-disaster-recovery.md](21-usb-disaster-recovery.md) - недельные комплекты VM/LXC и настроек хоста, приватная панель и восстановление на чистом Proxmox; медиадиск исключён.
 
 ## Текущее состояние
 

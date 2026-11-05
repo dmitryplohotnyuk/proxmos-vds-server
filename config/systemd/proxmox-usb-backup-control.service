@@ -1,0 +1,23 @@
+[Unit]
+Description=Fixed-command backup start socket
+After=dbus.service
+
+[Service]
+Group=pve-backup-ui
+Environment=PYTHONPATH=/opt/proxmox-usb-backup
+ExecStart=/usr/bin/python3 -m proxmox_usb_backup.web control
+RuntimeDirectory=proxmox-usb-backup-control
+RuntimeDirectoryMode=0750
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=96M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=Verified full USB recovery set for Proxmox
+After=pve-cluster.service
+RequiresMountsFor=/mnt/pve/usb-backups
+BindsTo=mnt-pve-usb\x2dbackups.mount
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/proxmox-usb-backup
+ExecStart=/usr/bin/python3 -m proxmox_usb_backup.engine run
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+CPUQuota=200%
+TimeoutStartSec=12h
+TimeoutStopSec=180
+KillMode=mixed
+NoNewPrivileges=true

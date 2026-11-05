@@ -8,6 +8,8 @@
 - Tailscale для приватного доступа, SSH и админ-панели;
 - CLI и веб-панель управления доменными маршрутами;
 - автоматический реестр VM/LXC сервисов с группировкой по IP и VPN-переключателями;
+- телеметрия мощности RAPL и автоматические статусы гостей в Home Assistant;
+- недельные USB-бэкапы всех VM/LXC и настроек хоста с приватной панелью;
 - systemd-сервисы, watchdog, тесты и эксплуатационная документация.
 
 Секреты, tunnel credentials и пароли в репозиторий не входят.
@@ -18,6 +20,9 @@
 Home Assistant, Meshtastic, Jellyfin, TorrServer и их данные нужно восстановить
 из собственных backups. Этот репозиторий настраивает их сетевой доступ, но не
 содержит установщики всех приложений или резервные копии дисков.
+Для восстановления всего сервера из подготовленного USB-комплекта используйте
+[disaster recovery](docs/21-usb-disaster-recovery.md), а не первоначальный deploy.
+Архивы и runtime-секреты находятся на USB, **не в Git**; медиадиск не копируется.
 
 ## Три способа развертывания
 
@@ -121,6 +126,17 @@ sudo ./scripts/create-adguard-lxc.sh
 
 Комплексный аудит, оставшиеся риски и ежедневный шифрованный backup настроек:
 [`docs/17-system-audit.md`](docs/17-system-audit.md).
+
+Телеметрия сервера и вкладка Home Assistant:
+[`docs/18-power-telemetry.md`](docs/18-power-telemetry.md),
+[`docs/19-home-assistant-server.md`](docs/19-home-assistant-server.md).
+Подготовка USB SSD с безопасной загрузкой без него:
+[`docs/20-external-usb-storage.md`](docs/20-external-usb-storage.md).
+Полные недельные комплекты, панель статуса и перенос на чистый Proxmox:
+[`docs/21-usb-disaster-recovery.md`](docs/21-usb-disaster-recovery.md).
+Это отдельный opt-in этап; базовый deploy не форматирует диски и не включает
+эти службы автоматически. USB-архивы содержат секреты и пока не зашифрованы:
+носитель требует физической защиты и отдельной внешней копии.
 
 ```bash
 python3 -m venv .venv

@@ -25,7 +25,8 @@ jobs:
           for file in scripts/*.sh config/domain-router-wrapper scripts/service-inventory-agent; do
             bash -n "$file"
           done
-          for file in src/domain_router_ui/static/*.js; do
+          for file in src/domain_router_ui/static/*.js src/proxmox_usb_backup/static/*.js config/home-assistant/*.js; do
             node --check "$file"
           done
+          node --test tests/ha-guests-card.test.cjs
           git diff --check

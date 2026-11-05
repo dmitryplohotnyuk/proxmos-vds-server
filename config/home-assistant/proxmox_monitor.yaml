@@ -1,0 +1,28 @@
+rest:
+  - resource: !secret proxmox_monitor_url
+    headers:
+      Authorization: !secret proxmox_monitor_authorization
+    scan_interval: 15
+    timeout: 5
+    sensor:
+      - name: Proxmox RAPL Power
+        unique_id: local_proxmox_rapl_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        value_template: "{{ value_json.total_rapl_w }}"
+        availability: "{{ value_json is defined and value_json.total_rapl_w is number }}"
+      - name: Proxmox Inventory
+        unique_id: local_proxmox_inventory
+        icon: mdi:server
+        value_template: "{{ value_json.running_count }}"
+        availability: "{{ value_json is defined and value_json.guests is not none }}"
+        json_attributes:
+          - guests
+          - guest_count
+          - power_scope
+          - media_storage
+      - name: Proxmox Last Update
+        unique_id: local_proxmox_last_update
+        device_class: timestamp
+        value_template: "{{ value_json.sampled_at }}"

@@ -1,0 +1,15 @@
+[Unit]
+Description=Check USB backup health and bounded retry
+After=pve-cluster.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH=/opt/proxmox-usb-backup
+ExecStart=/usr/bin/python3 -m proxmox_usb_backup.engine health
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/proxmox-usb-backup
+CapabilityBoundingSet=
+TimeoutStartSec=30

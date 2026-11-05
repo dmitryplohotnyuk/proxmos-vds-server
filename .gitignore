@@ -30,3 +30,5 @@ vaultwarden-data/
 vaultwarden-backups/
 *.age
 *age-identity*
+proxmox-ha-monitor.json
+**/secrets.yaml
