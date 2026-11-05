@@ -15,7 +15,9 @@ if [[ $state == active || $state == activating || $state == deactivating ]]; the
 fi
 getent passwd pve-backup-ui >/dev/null || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin pve-backup-ui
 install -d -m 0755 /opt/proxmox-usb-backup /etc/proxmox-usb-backup /var/lib/proxmox-usb-backup
-tar --exclude=__pycache__ --exclude='*.pyc' -C "$source/src" -cf - proxmox_usb_backup | tar -C /opt/proxmox-usb-backup -xf -
+tar --exclude=__pycache__ --exclude='*.pyc' -C "$source/src" -cf - proxmox_usb_backup | tar --no-same-owner -C /opt/proxmox-usb-backup -xf -
+chown -R --no-dereference root:root /opt/proxmox-usb-backup
+chmod -R go-w /opt/proxmox-usb-backup
 install -m 0644 "$source/docs/21-usb-disaster-recovery.md" /opt/proxmox-usb-backup/proxmox_usb_backup/static/recovery-guide.md
 for file in "$source"/config/systemd/proxmox-usb-backup*.service "$source"/config/systemd/proxmox-usb-backup*.timer; do
  install -m 0644 "$file" /etc/systemd/system/

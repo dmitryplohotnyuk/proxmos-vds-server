@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tarfile
 
-from .common import command, load_set, safe_path
+from .common import command, load_set, safe_path, recovery_lock
 
 HOST_RESTORE = ('usr/local', 'opt/service-inventory', 'opt/proxmox-usb-backup',
                 'etc/sysctl.d', 'etc/default/proxmox-nic-watchdog', 'etc/systemd/system',
@@ -120,6 +120,17 @@ def copy_config(source, destination):
         shutil.copy2(source, destination)
 
 
+def secure_service_ssh(home):
+    command('chown', '-R', 'root:root', str(home))
+    home.chmod(0o755)
+    ssh = home / '.ssh'
+    if ssh.is_dir():
+        ssh.chmod(0o755)
+        keys = ssh / 'authorized_keys'
+        if keys.is_file():
+            keys.chmod(0o644)
+
+
 def apply_host(staged, manifest, network_map, restore_identities=False):
     source = Path(staged) / 'host'
     if not (source / 'etc/pve/storage.cfg').is_file():
@@ -145,7 +156,7 @@ def apply_host(staged, manifest, network_map, restore_identities=False):
                 (target / path.name).chmod(0o600)
             else:
                 copy_config(path, target / path.name)
-    command('chown', '-R', 'service-inventory:service-inventory', '/var/lib/service-inventory-ssh')
+    secure_service_ssh(Path('/var/lib/service-inventory-ssh'))
     candidate = Path('/root/proxmox-network-candidate')
     candidate.mkdir(mode=0o700, exist_ok=True)
     network = source / 'etc/network'
@@ -187,6 +198,11 @@ def main():
     parser.add_argument('--drill', action='store_true')
     parser.add_argument('--restore-identities', action='store_true')
     args = parser.parse_args()
+    with recovery_lock():
+        execute(args, parser)
+
+
+def execute(args, parser):
     if args.action == 'list':
         for _, path, manifest in list_sets(args.root):
             print(path.name, manifest['completed_at'], len(manifest['guests']), manifest['total_bytes'])

@@ -689,3 +689,38 @@ Vaultwarden-заметка обновлена. Ручной запуск не о
 Ложный read-only статус health исправлен: ProtectSystem=strict делает VFS в его
 namespace read-only, но реальный ext4 остаётся rw. Проверка использует FS-OPTIONS;
 необходимость различать флаги подтверждена отдельным sandbox probe, защита не снята.
+
+### Первый Успешный Полный Комплект
+
+`set-20261105T112855Z-beb5290b`: 9 гостей, 28.26 GiB. Сбор с 13:28, публикация
+после повторного uncached SHA-check в 13:49 Europe/Kyiv. Все native zstd/TAR/VMA
+проверки и оба прохода SHA прошли. В storage `usb-backups` видны 6 LXC и 3 VM;
+место не удваивается благодаря hard links. Медиадиск не включён.
+Добавлен shared recovery lock на весь CLI, включая SHA-стадию, и exclusive lock
+на prune; old set не удаляется, пока portable helper его читает. Отдельная проверка
+восстановления VM/LXC следует после этого checkpoint; другой физический хост
+и полная RAM пока не тестировались.
+
+Restore-drill завершён: VM 103 → 9902 и CT 108 → 9901 восстановлены штатными
+qmrestore/pct restore, остались stopped/onboot=0, сети link_down=1, USB/PCI сняты.
+SQLite Vaultwarden: integrity_check ok, 17 записей, без чтения паролей. Обе копии
+удалены после проверки. Host snapshot безопасно распакован отдельно, обязательные
+конфиги/Tailscale state присутствуют, reference pmxcfs SQLite integrity ok;
+никакие настройки не применялись поверх живого хоста. Reader lock реально запретил
+exclusive/prune во время helper SHA-фазы. Полные SHA повторно прошли в обоих
+recovery-вызовах после публикации.
+
+Удалены только наш временный fio-файл, тестовая распаковка и старый незавершённый
+staging, уже после проверки нового комплекта. Проверенный set сохранён, свободно
+около 338 GiB. Гостей снова ровно 9, все running. Код в `/opt/proxmox-usb-backup`
+закреплён root:root без group/other write; установщик не сохраняет UID упаковочной
+машины. В apply-host служебный SSH home/authorized_keys остаётся root-owned, как
+в исходной установке: сервисный пользователь не может убрать forced command.
+
+Финальные smoke checks: Proxmox HTTPS, Domain Router, Vaultwarden и backup API/guide
+отвечают 200 через Tailscale; Jellyfin, TorrServer LAN и Home Assistant — 200,
+AdGuard — штатный 302 на вход, DNS отвечает. Прямой запрос к TorrServer от
+10.77.0.1 закономерно блокируется прежним firewall; разрешённый LAN-доступ проверен,
+правила не расширялись. Backup UI/controller, PVE и HA monitor active.
+Другой физический сервер и полный offline RAM test остаются отдельными проверками;
+единичный прошлый SHA mismatch не выдаётся за доказанную неисправность SSD.

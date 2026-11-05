@@ -6,11 +6,28 @@ import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
+from contextlib import contextmanager
+import fcntl
 
 CONFIG = Path('/etc/proxmox-usb-backup/config.json')
 STATE = Path('/var/lib/proxmox-usb-backup')
+RECOVERY_LOCK = Path('/run/lock/proxmox-usb-recovery.lock')
 GENERATION = re.compile(r'set-\d{8}T\d{6}Z-[a-f0-9]{8}')
 ARCHIVE = re.compile(r'vzdump-(qemu|lxc)-(\d+)-\d{4}_\d{2}_\d{2}-\d{2}_\d{2}_\d{2}\.(vma|tar)\.zst')
+
+
+@contextmanager
+def recovery_lock(exclusive=False):
+    fd = os.open(RECOVERY_LOCK, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    with os.fdopen(fd, 'a') as lock:
+        if os.fstat(lock.fileno()).st_uid != os.geteuid():
+            raise RuntimeError('Unexpected recovery lock owner')
+        mode = fcntl.LOCK_EX | fcntl.LOCK_NB if exclusive else fcntl.LOCK_SH
+        try:
+            fcntl.flock(lock, mode)
+        except BlockingIOError as error:
+            raise RuntimeError('Recovery reader active; old recovery sets retained') from error
+        yield
 
 
 def now():

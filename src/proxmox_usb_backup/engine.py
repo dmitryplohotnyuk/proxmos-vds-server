@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 from .common import (ARCHIVE, CONFIG, GENERATION, STATE, atomic_json, command, digest,
                      disk_status, exclusions, guest_inventory, load_set, now, read_json,
-                     require_disk, safe_path, sync_directory)
+                     require_disk, safe_path, sync_directory, recovery_lock)
 
 HOST_PATHS = ('etc', 'usr/local', 'opt/service-inventory', 'opt/proxmox-usb-backup',
               'root', 'var/lib/service-inventory', 'var/lib/service-inventory-ssh',
@@ -331,6 +331,11 @@ def publish_archives(directory, dump, manifest):
 
 
 def prune_sets(root, keep):
+    with recovery_lock(exclusive=True):
+        return prune_sets_locked(root, keep)
+
+
+def prune_sets_locked(root, keep):
     if not GENERATION.fullmatch(keep):
         raise ValueError('Invalid retained set')
     load_set(root / 'sets' / keep, verify_files=True)

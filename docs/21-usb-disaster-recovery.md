@@ -65,7 +65,10 @@ vzdump до 128 MiB/s, один поток zstd, гости последоват
    переносится в `sets/`. Из `dump/` создаются hard links, без второго расхода
    места, чтобы архивы были видны в штатном интерфейсе Proxmox.
 6. Только после этого старые **наши завершённые** комплекты удаляются. При
-   активном restore очистка откладывается. Чужие файлы/бэкапы не затрагиваются.
+   активном restore очистка откладывается. Recovery helper держит shared lock
+   `/run/lock/proxmox-usb-recovery.lock` уже на этапе проверки SHA, до появления
+   native PVE restore task; pruner требует exclusive lock и при конфликте сохраняет
+   старые копии. Чужие файлы/бэкапы не затрагиваются.
 
 При ошибке, отключении USB, нехватке места, изменении состава гостей или плохом
 архиве предыдущий успешный комплект не удаляется. Частичные файлы текущей
@@ -143,6 +146,8 @@ Proxmox + Python 3, zstd, vma, tailscale. Pip/npm на хосте не нужн�
 URL/Origin панели определяются по фактическому `Self.DNSName` Tailscale нового
 хоста; имя старого узла не зашито в HTTP API. Существующий allowlist сохраняется.
 UI/controller перезапускаются при обновлении, другие сервисы не затрагиваются.
+Установленный привилегированный код root:root без group/other write, UID автора
+source tar не переносится в исполняемый код.
 
 ## Восстановление На Чистом Сервере
 
@@ -187,7 +192,9 @@ python3 -m proxmox_usb_backup.recovery apply-host --root /mnt/recovery \
   --confirm --old-server-off
 ```
 
-Восстанавливаются наши scripts/services/configs и сервисные аккаунты. Сеть не
+Восстанавливаются наши scripts/services/configs и сервисные аккаунты.
+Служебный SSH home и authorized_keys остаются root-owned, сохраняя forced command.
+Сеть не
 активируется автоматически: кандидат находится в `/root/proxmox-network-candidate`.
 Через локальную консоль проверить bridges, uplink, IP и gateway, перенести кандидат
 в `/etc/network`, затем `ifquery --check -a`/`ifreload -a` по месту. Обновить имя

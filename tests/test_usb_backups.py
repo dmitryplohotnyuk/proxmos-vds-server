@@ -16,6 +16,52 @@ import pytest
 from proxmox_usb_backup import common, engine, recovery, web
 
 
+@pytest.fixture(autouse=True)
+def recovery_lock_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(common, 'RECOVERY_LOCK', tmp_path/'recovery.lock')
+
+
+def test_recovery_reader_prevents_pruning_before_native_restore_task(tmp_path, monkeypatch):
+    old, _ = completed(tmp_path, '20261101T120000Z')
+    new, _ = completed(tmp_path)
+    monkeypatch.setattr(engine, 'command', lambda *args: '[]')
+    with common.recovery_lock():
+        with pytest.raises(RuntimeError, match='Recovery reader active'):
+            engine.prune_sets(tmp_path, new.name)
+        assert old.exists()
+    engine.prune_sets(tmp_path, new.name)
+    assert not old.exists() and new.exists()
+
+
+def test_recovery_lock_never_follows_a_symlink(tmp_path):
+    target = tmp_path/'private-file'
+    target.write_text('untouched')
+    common.RECOVERY_LOCK.symlink_to(target)
+    with pytest.raises(OSError):
+        with common.recovery_lock():
+            pytest.fail('must not follow lock symlink')
+    assert target.read_text() == 'untouched'
+
+
+def test_recovery_lock_does_not_hang_on_a_precreated_fifo():
+    os.mkfifo(common.RECOVERY_LOCK, 0o600)
+    with pytest.raises(OSError):
+        with common.recovery_lock():
+            pytest.fail('must not open a FIFO as a regular lock')
+
+
+def test_recovery_keeps_forced_service_ssh_keys_root_owned(tmp_path, monkeypatch):
+    home = tmp_path/'service-ssh'
+    (home/'.ssh').mkdir(parents=True)
+    (home/'.ssh/authorized_keys').write_text('restrict,command="fixed-agent" public-key')
+    calls = []
+    monkeypatch.setattr(recovery, 'command', lambda *args:calls.append(args))
+    recovery.secure_service_ssh(home)
+    assert calls == [('chown','-R','root:root',str(home))]
+    assert home.stat().st_mode & 0o777 == 0o755
+    assert (home/'.ssh/authorized_keys').stat().st_mode & 0o777 == 0o644
+
+
 @pytest.mark.parametrize('utc_hour,expected', [(7, False), (8, True), (15, True), (16, False), (23, False)])
 def test_automatic_retry_only_starts_in_kyiv_daytime(utc_hour, expected):
     moment = datetime(2026, 11, 5, utc_hour, tzinfo=timezone.utc)
